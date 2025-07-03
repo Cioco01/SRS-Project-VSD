@@ -1,0 +1,5 @@
+# scripts/config.yaml
+# Configurazione delle anomalie benigne
+simulate_dns_spike: true
+simulate_http_port_change: true
+simulate_unusual_db_client: true
