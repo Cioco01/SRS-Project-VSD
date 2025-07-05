@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetChaos Simulation GUI</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f0f2f5; color: #333; line-height: 1.6; }
+        .container { background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 900px; margin: 30px auto; }
+        h1 { color: #007bff; text-align: center; margin-bottom: 30px; font-weight: 600; }
+        h2 { color: #0056b3; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-top: 25px; margin-bottom: 20px; font-weight: 500; }
+        .section { margin-bottom: 30px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fcfcfc; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        input[type="text"], input[type="number"], input[type="password"], select, textarea {
+            width: calc(100% - 24px); /* Adjust for padding and border */
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #d4d4d4;
+            border-radius: 6px;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+            font-size: 1em;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 10px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover { background-color: #218838; }
+        .add-button { background-color: #17a2b8; }
+        .add-button:hover { background-color: #138496; }
+        .remove-button { background-color: #dc3545; }
+        .remove-button:hover { background-color: #c82333; }
+        .launch-button { background-color: #007bff; margin-top: 20px; padding: 15px 30px; font-size: 1.1em; }
+        .launch-button:hover { background-color: #0056b3; }
+
+        #response {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status-section {
+            padding: 10px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status-section h3 { margin: 0; color: #155724; }
+        .agent-status {
+            padding: 5px 0;
+            border-top: 1px dashed #c3e6cb;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        .attack-params {
+            border: 1px dashed #b9b9b9;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 6px;
+            background-color: #f7f7f7;
+        }
+        .attack-entry {
+            border: 1px solid #a0d8e0;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            background-color: #e0f7fa;
+            position: relative;
+        }
+        .attack-entry .remove-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NetChaos Simulation Orchestrator GUI</h1>
+
+        <div class="status-section">
+            <h3>Orchestrator Backend: <span id="orchestratorStatus">Checking...</span></h3>
+            <div id="agentStatuses"></div>
+        </div>
+
+        <div class="section">
+            <h2>Simulation Configuration</h2>
+            <label for="simulationDuration">Simulation Duration (seconds):</label>
+            <input type="number" id="simulationDuration" value="120" min="10">
+
+            <h3>Traffic Types (Benign):</h3>
+            <input type="checkbox" id="httpBrowse" checked>
+            <label for="httpBrowse">HTTP Browse</label><br>
+            <input type="checkbox" id="dnsQueries" checked>
+            <label for="dnsQueries">DNS Queries</label><br>
+            <input type="checkbox" id="dbAccess" checked>
+            <label for="dbAccess">DB Access</label><br>
+
+            <h3>Anomalies to Inject:</h3>
+            <input type="checkbox" id="abnormalTraffic">
+            <label for="abnormalTraffic">Abnormal Port Scans/Traffic Patterns</label><br>
+            <input type="checkbox" id="apiAnomaly">
+            <label for="apiAnomaly">Unauthorized API Call Attempts</label><br>
+
+            <h3>Attacks to Schedule:</h3>
+            <div id="attacksContainer">
+                </div>
+            <button class="add-button" onclick="addAttack()">Add Attack</button>
+            <button class="nav-button" onclick="window.location.href = 'http://' + window.location.hostname + ':5004/';">Go to Data Viewer GUI (5004)</button>
+            <button class="launch-button" onclick="startFullSimulation()">Start Full Simulation</button>
+        </div>
+        </div>
+
+        <div class="section">
+            <h2>API Response</h2>
+            <pre id="response"></pre>
+        </div>
+    </div>
+
+    <script>
+        const backendUrl = window.location.origin;
+        let attacks = []; // Array per memorizzare gli attacchi configurati
+
+        // --- Funzioni di Stato e Inizializzazione ---
+        async function checkBackendStatus() {
+            try {
+                const res = await fetch(`${backendUrl}/api/status`);
+                const data = await res.json();
+                document.getElementById('orchestratorStatus').textContent = data.orchestrator.status;
+
+                const agentStatusesDiv = document.getElementById('agentStatuses');
+                agentStatusesDiv.innerHTML = '';
+                for (const agentName in data.agents) {
+                    const agentStatus = data.agents[agentName];
+                    const div = document.createElement('div');
+                    div.className = 'agent-status';
+                    div.textContent = `${agentName}: ${agentStatus.status || agentStatus.message}`;
+                    agentStatusesDiv.appendChild(div);
+                }
+
+            } catch (error) {
+                document.getElementById('orchestratorStatus').textContent = 'Error: Backend Unreachable';
+                document.getElementById('agentStatuses').innerHTML = '<div class="agent-status">Could not fetch agent statuses.</div>';
+                console.error('Error checking backend status:', error);
+            }
+        }
+
+        // --- Gestione Attacchi Dinamici ---
+        function addAttack() {
+            const newAttack = {
+                type: 'port_scan',
+                target: 'web-server',
+                params: {}
+            };
+            attacks.push(newAttack);
+            renderAttacks();
+        }
+
+        function removeAttack(index) {
+            attacks.splice(index, 1);
+            renderAttacks();
+        }
+
+        function renderAttacks() {
+            const container = document.getElementById('attacksContainer');
+            container.innerHTML = ''; // Pulisce il contenitore
+
+            attacks.forEach((attack, index) => {
+                const attackEntryDiv = document.createElement('div');
+                attackEntryDiv.className = 'attack-entry';
+                attackEntryDiv.innerHTML = `
+                    <button class="remove-button" onclick="removeAttack(${index})">Remove</button>
+                    <label>Attack Type:</label>
+                    <select id="attackType_${index}" onchange="updateAttack(${index}, 'type', this.value); toggleAttackParamsInEntry(${index})">
+                        <option value="port_scan" ${attack.type === 'port_scan' ? 'selected' : ''}>Port Scan</option>
+                        <option value="brute_force" ${attack.type === 'brute_force' ? 'selected' : ''}>Brute Force</option>
+                        <option value="lateral_movement_ssh" ${attack.type === 'lateral_movement_ssh' ? 'selected' : ''}>Lateral Movement (SSH)</option>
+                        <option value="malware_drop" ${attack.type === 'malware_drop' ? 'selected' : ''}>Malware Drop</option>
+                    </select>
+
+                    <label>Target VM:</label>
+                    <select id="targetName_${index}" onchange="updateAttack(${index}, 'target', this.value)">
+                        <option value="web-server" ${attack.target === 'web-server' ? 'selected' : ''}>Web Server</option>
+                        <option value="db-server" ${attack.target === 'db-server' ? 'selected' : ''}>DB Server</option>
+                        <option value="internal-client" ${attack.target === 'internal-client' ? 'selected' : ''}>Internal Client</option>
+                    </select>
+
+                    <div id="attackParams_${index}" class="attack-params">
+                        </div>
+                `;
+                container.appendChild(attackEntryDiv);
+
+                // Inietta i parametri specifici per l'attacco
+                renderAttackSpecificParams(index, attack.type, attack.params);
+            });
+        }
+
+        function renderAttackSpecificParams(index, type, params) {
+            const paramsDiv = document.getElementById(`attackParams_${index}`);
+            paramsDiv.innerHTML = ''; // Pulisce i parametri precedenti
+
+            switch (type) {
+                case 'port_scan':
+                    paramsDiv.innerHTML = `
+                        <label>Scan Type (Nmap):</label>
+                        <input type="text" id="scanType_${index}" value="${params.scan_type || '-sS'}" onchange="updateAttackParams(${index}, 'scan_type', this.value)">
+                        <label>Ports (e.g., 80,443,22 or 1-1000):</label>
+                        <input type="text" id="ports_${index}" value="${params.ports || '22,80,443,3306'}" onchange="updateAttackParams(${index}, 'ports', this.value)">
+                    `;
+                    break;
+                case 'brute_force':
+                    paramsDiv.innerHTML = `
+                        <label>Service (e.g., ssh, ftp, mysql):</label>
+                        <input type="text" id="bfService_${index}" value="${params.service || 'ssh'}" onchange="updateAttackParams(${index}, 'service', this.value)">
+                        <label>Usernames (comma-separated):</label>
+                        <input type="text" id="usernameList_${index}" value="${(params.username_list || ['admin', 'user']).join(',')}" onchange="updateAttackParams(${index}, 'username_list', this.value.split(',').map(s => s.trim()))">
+                        <label>Passwords (comma-separated):</label>
+                        <input type="text" id="passwordList_${index}" value="${(params.password_list || ['password', '123456']).join(',')}" onchange="updateAttackParams(${index}, 'password_list', this.value.split(',').map(s => s.trim()))">
+                    `;
+                    break;
+                case 'lateral_movement_ssh':
+                    paramsDiv.innerHTML = `
+                        <label>Username:</label>
+                        <input type="text" id="lmUsername_${index}" value="${params.username || 'gcp-user'}" onchange="updateAttackParams(${index}, 'username', this.value)">
+                        <label>Password:</label>
+                        <input type="password" id="lmPassword_${index}" value="${params.password || 'your_vm_password'}" onchange="updateAttackParams(${index}, 'password', this.value)">
+                        <label>Command to execute:</label>
+                        <textarea id="lmCommand_${index}" onchange="updateAttackParams(${index}, 'command', this.value)">${params.command || 'ls -la /'}</textarea>
+                    `;
+                    break;
+                case 'malware_drop':
+                    paramsDiv.innerHTML = `
+                        <label>Malware URL (simulated):</label>
+                        <input type="text" id="malwareUrl_${index}" value="${params.malware_url || 'http://evil.example.com/malware.exe'}" onchange="updateAttackParams(${index}, 'malware_url', this.value)">
+                    `;
+                    break;
+            }
+        }
+
+        function updateAttack(index, field, value) {
+            if (field === 'type') {
+                attacks[index].type = value;
+                attacks[index].params = {}; // Reset params when type changes
+            } else if (field === 'target') {
+                attacks[index].target = value;
+            }
+            // re-render specific params based on new type
+            renderAttackSpecificParams(index, attacks[index].type, attacks[index].params);
+        }
+
+        function updateAttackParams(attackIndex, paramKey, paramValue) {
+            attacks[attackIndex].params[paramKey] = paramValue;
+        }
+
+        function toggleAttackParamsInEntry(index) {
+            const attackType = document.getElementById(`attackType_${index}`).value;
+            renderAttackSpecificParams(index, attackType, attacks[index].params);
+        }
+
+        // --- Funzione per Avviare la Simulazione Completa ---
+        async function startFullSimulation() {
+            const simulationDuration = document.getElementById('simulationDuration').value;
+
+            const trafficTypes = [];
+            if (document.getElementById('httpBrowse').checked) trafficTypes.push('http_Browse');
+            if (document.getElementById('dnsQueries').checked) trafficTypes.push('dns_queries');
+            if (document.getElementById('dbAccess').checked) trafficTypes.push('db_access');
+
+            const anomalyTypes = [];
+            if (document.getElementById('abnormalTraffic').checked) anomalyTypes.push('abnormal_traffic');
+            if (document.getElementById('apiAnomaly').checked) anomalyTypes.push('api_anomaly');
+
+            const payload = {
+                simulation_duration_seconds: parseInt(simulationDuration),
+                traffic_types: trafficTypes,
+                anomaly_types: anomalyTypes,
+                attacks: attacks.map(a => ({ // Mappa per inviare solo i dati necessari per il backend
+                    attack_type: a.type,
+                    target_name: a.target,
+                    params: a.params
+                }))
+            };
+
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = 'Starting full simulation...';
+
+            try {
+                const res = await fetch(`${backendUrl}/api/start_simulation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.textContent = 'Error starting simulation: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+
+        // Inizializza la GUI all'avvio
+        document.addEventListener('DOMContentLoaded', () => {
+            checkBackendStatus(); // Controlla lo stato del backend all'avvio
+            setInterval(checkBackendStatus, 10000); // Aggiorna lo stato ogni 10 secondi
+            renderAttacks(); // Renderizza gli attacchi iniziali (se ce ne sono)
+        });
+    </script>
+</body>
+</html>

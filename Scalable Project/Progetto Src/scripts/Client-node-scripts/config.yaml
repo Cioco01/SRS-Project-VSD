@@ -1,0 +1,7 @@
+web_server_ip:
+dns_server_ip:
+db_server_ip:
+
+simulate_dns_spike: false #da imporre true dopo
+simulate_http_port_change: false #da imporre true dopo
+simulate_unusual_db_client: false #da imporre true dopo

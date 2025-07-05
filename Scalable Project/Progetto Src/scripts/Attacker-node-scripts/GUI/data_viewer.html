@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetChaos Data Viewer</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f0f2f5; color: #333; line-height: 1.6; }
+        .container { background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 1200px; margin: 30px auto; }
+        h1 { color: #007bff; text-align: center; margin-bottom: 30px; font-weight: 600; }
+        h2 { color: #0056b3; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-top: 25px; margin-bottom: 20px; font-weight: 500; }
+        .section { margin-bottom: 30px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fcfcfc; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        input[type="text"], input[type="number"], select {
+            width: calc(100% - 24px);
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #d4d4d4;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 10px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover { background-color: #218838; }
+        .nav-button { background-color: #6c757d; }
+        .nav-button:hover { background-color: #5a6268; }
+        .export-button { background-color: #17a2b8; }
+        .export-button:hover { background-color: #138496; }
+        .clear-button { background-color: #dc3545; }
+        .clear-button:hover { background-color: #c82333; }
+
+        .data-table-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+        th, td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+            word-break: break-word; /* Ensure long content wraps */
+        }
+        th {
+            background-color: #f8f8f8;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        tr:hover { background-color: #f1f1f1; }
+        .status-section {
+            padding: 10px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status-section h3 { margin: 0; color: #155724; }
+        #response {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-controls > div {
+            flex: 1;
+            min-width: 180px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NetChaos Data Viewer</h1>
+
+        <div class="status-section">
+            <h3>Data Viewer Backend: <span id="backendStatus">Checking...</span></h3>
+        </div>
+
+        <div class="section">
+            <button class="nav-button" onclick="window.location.href = 'http://' + window.location.hostname + ':5000/';">Go to Orchestrator GUI (5000)</button>
+        </div>
+
+        <div class="section">
+            <h2>Captured Network Traffic (Raw)</h2> <div class="filter-controls">
+                <div>
+                    <label for="filterProtocol">Protocol:</label>
+                    <input type="text" id="filterProtocol" placeholder="e.g., TCP, UDP, ICMP">
+                </div>
+                <div>
+                    <label for="filterSourceIp">Source IP:</label>
+                    <input type="text" id="filterSourceIp" placeholder="e.g., 10.0.1.10">
+                </div>
+                <div>
+                    <label for="filterDestinationIp">Destination IP:</label>
+                    <input type="text" id="filterDestinationIp" placeholder="e.0.0.0.10">
+                </div>
+                 <div>
+                    <label for="filterSourcePort">Source Port:</label>
+                    <input type="number" id="filterSourcePort" placeholder="e.g., 80, 443">
+                </div>
+                <div>
+                    <label for="filterDestinationPort">Destination Port:</label>
+                    <input type="number" id="filterDestinationPort" placeholder="e.g., 80, 3306">
+                </div>
+                <button onclick="fetchData()">Apply Filters</button>
+                <button onclick="clearFilters()">Clear Filters</button>
+            </div>
+            
+            <button onclick="fetchData()">Refresh Data (Last 1000)</button>
+            <button class="export-button" onclick="exportCsv()">Export All to CSV</button>
+            <button class="clear-button" onclick="clearData()">Clear All Data in DB</button>
+
+            <div class="data-table-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp Capture</th> <th>Source IP</th>
+                            <th>Destination IP</th>
+                            <th>Source Port</th> <th>Destination Port</th> <th>Protocol</th>
+                            <th>Packet Length</th> <th>Flags</th> <th>TTL</th> <th>Description</th>
+                            <th>Full Line</th> </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </div>
+            <pre id="response"></pre>
+        </div>
+    </div>
+
+    <script>
+        const dataViewerBackendUrl = window.location.origin; // Assume data viewer is on the same host, port 5004
+
+        // --- Backend Status Check ---
+        async function checkBackendStatus() {
+            try {
+                const res = await fetch(`${dataViewerBackendUrl}/api/status`);
+                const data = await res.json();
+                document.getElementById('backendStatus').textContent = data.status;
+            } catch (error) {
+                document.getElementById('backendStatus').textContent = 'Error: Backend Unreachable';
+                console.error('Error checking backend status:', error);
+            }
+        }
+
+        // --- Fetch Data from Backend ---
+        async function fetchData() {
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = 'Fetching data...';
+            const tableBody = document.querySelector('#dataTable tbody');
+            // Clear existing rows and show loading message, adjust colspan for new columns
+            tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>'; 
+
+            const protocol = document.getElementById('filterProtocol').value;
+            const sourceIp = document.getElementById('filterSourceIp').value;
+            const destinationIp = document.getElementById('filterDestinationIp').value;
+            const sourcePort = document.getElementById('filterSourcePort').value;
+            const destinationPort = document.getElementById('filterDestinationPort').value;
+
+            let queryParams = new URLSearchParams();
+            if (protocol) queryParams.append('protocol', protocol);
+            if (sourceIp) queryParams.append('source_ip', sourceIp);
+            if (destinationIp) queryParams.append('destination_ip', destinationIp);
+            if (sourcePort) queryParams.append('source_port', sourcePort);
+            if (destinationPort) queryParams.append('destination_port', destinationPort);
+
+            try {
+                const res = await fetch(`${dataViewerBackendUrl}/api/get_captured_data?${queryParams.toString()}`);
+                const data = await res.json();
+                responseDiv.textContent = JSON.stringify(data.status, null, 2);
+
+                if (data.status === "success") {
+                    renderTable(data.data);
+                } else {
+                    // Adjust colspan for error message
+                    tableBody.innerHTML = `<tr><td colspan="11" style="color: red;">Error: ${data.message || 'Unknown error'}</td></tr>`;
+                }
+            } catch (error) {
+                responseDiv.textContent = 'Error fetching data: ' + error.message;
+                // Adjust colspan for error message
+                tableBody.innerHTML = `<tr><td colspan="11" style="color: red;">Failed to load data: ${error.message}</td></tr>`;
+                console.error('Error:', error);
+            }
+        }
+
+        function renderTable(data) {
+            const tableBody = document.querySelector('#dataTable tbody');
+            tableBody.innerHTML = ''; // Clear existing data
+
+            if (data.length === 0) {
+                // Adjust colspan for no data message
+                tableBody.innerHTML = '<tr><td colspan="11">No data available.</td></tr>';
+                return;
+            }
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                // Ensure field names match database columns (after Python processing)
+                tr.innerHTML = `
+                    <td>${new Date(row.timestamp_capture / 1000).toLocaleString()}</td> <td>${row.source_ip || ''}</td>
+                    <td>${row.destination_ip || ''}</td>
+                    <td>${row.source_port || ''}</td>
+                    <td>${row.destination_port || ''}</td>
+                    <td>${row.protocol || ''}</td>
+                    <td>${row.packet_length || ''}</td>
+                    <td>${row.flags || ''}</td>
+                    <td>${row.ttl || ''}</td>
+                    <td>${row.description || ''}</td>
+                    <td>${row.full_line || ''}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function clearFilters() {
+            document.getElementById('filterProtocol').value = '';
+            document.getElementById('filterSourceIp').value = '';
+            document.getElementById('filterDestinationIp').value = '';
+            document.getElementById('filterSourcePort').value = '';
+            document.getElementById('filterDestinationPort').value = '';
+            fetchData(); // Refresh data with cleared filters
+        }
+
+        // --- Export to CSV ---
+        async function exportCsv() {
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = 'Exporting data to CSV...';
+            try {
+                // Fetch directly to trigger download
+                window.open(`${dataViewerBackendUrl}/api/export_csv`, '_blank');
+                responseDiv.textContent = 'CSV export initiated. Check your downloads.';
+            } catch (error) {
+                responseDiv.textContent = 'Error exporting CSV: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+
+        // --- Clear Data in DB ---
+        async function clearData() {
+            if (!confirm('Are you sure you want to delete ALL data from the database? This action cannot be undone.')) {
+                return;
+            }
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = 'Clearing data from database...';
+            try {
+                const res = await fetch(`${dataViewerBackendUrl}/api/clear_data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+                if (data.status === 'success') {
+                    fetchData(); // Refresh table after clearing
+                }
+            } catch (error) {
+                responseDiv.textContent = 'Error clearing data: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            checkBackendStatus();
+            setInterval(checkBackendStatus, 10000); // Check status every 10 seconds
+            fetchData(); // Load initial data
+        });
+    </script>
+</body>
+</html>
