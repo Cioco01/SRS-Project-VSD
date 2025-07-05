@@ -62,3 +62,9 @@ output "gcs_bucket_url" {
   description = "URL del bucket Cloud Storage."
   value       = module.cloud_storage.gcs_bucket_url
 }
+
+output "gcp_project_id" {
+  description = "L'ID del progetto GCP utilizzato."
+  value       = var.gcp_project_id
+  
+}
