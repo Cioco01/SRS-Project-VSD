@@ -253,7 +253,7 @@
             
             <div style="margin-bottom: 20px;">
                 <button onclick="fetchData()">Refresh Data (Last 1000)</button>
-                <button class="export-button" onclick="exportCsv()">Export All to CSV</button>
+                <button class="export-button" onclick="exportCsv()">Export All to GCS</button>
                 <button class="clear-button" onclick="clearData()">Clear All Data in DB</button>
             </div>
 
@@ -376,16 +376,23 @@
             fetchData(); // Refresh data with cleared filters
         }
 
-        // --- Export to CSV ---
+        // --- Export to CSV (now uploads to GCS) ---
         async function exportCsv() {
             const responseDiv = document.getElementById('response');
-            responseDiv.textContent = 'Exporting data to CSV...';
+            responseDiv.textContent = 'Exporting all data to GCS...';
             try {
-                // Fetch directly to trigger download
-                window.open(`${dataViewerBackendUrl}/api/export_csv`, '_blank');
-                responseDiv.textContent = 'CSV export initiated. Check your downloads.';
+                const res = await fetch(`${dataViewerBackendUrl}/api/export_csv`, {
+                    method: 'GET' // Still a GET request as it's an export trigger
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    responseDiv.textContent = `Success: ${data.message}\nFile available at: ${data.gcs_path}`;
+                } else {
+                    responseDiv.textContent = `Error exporting to GCS: ${data.message || 'Unknown error'}`;
+                }
             } catch (error) {
-                responseDiv.textContent = 'Error exporting CSV: ' + error.message;
+                responseDiv.textContent = 'Error initiating GCS export: ' + error.message;
                 console.error('Error:', error);
             }
         }

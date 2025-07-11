@@ -5,6 +5,8 @@ import pandas as pd
 from google.cloud.sql.connector import Connector
 import pymysql
 import time
+from datetime import datetime
+from google.cloud import storage
 
 app = Flask(__name__, static_folder='static')
 
@@ -14,9 +16,10 @@ CLOUDSQL_CONNECTION_NAME = os.environ.get('CLOUDSQL_CONNECTION_NAME', 'gruppo-9-
 CLOUDSQL_DATABASE_NAME = os.environ.get('CLOUDSQL_DATABASE_NAME', 'simulation_data')
 CLOUDSQL_USER_NAME = os.environ.get('CLOUDSQL_USER_NAME', 'simuser')
 CLOUDSQL_USER_PASSWORD = os.environ.get('CLOUDSQL_USER_PASSWORD', 'password') # USA SECRET MANAGER!
+GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', 'gruppo-9-456912-traffic-data')
 
 connector = Connector()
-
+storage_client = storage.Client() 
 def get_cloudsql_conn():
     """Stabilisce una connessione al database Cloud SQL."""
     try:
@@ -130,31 +133,37 @@ def export_csv():
                 source_port, destination_port, protocol,
                 packet_length, flags, ttl, description, full_line
             FROM raw_network_traffic
-            ORDER BY timestamp_capture DESC
+            ORDER BY timestamp_capture ASC
         """
         df = pd.read_sql(query, conn)
         
-        df = clean_numeric_data(df)
-
+        # df = df.fillna('-')  # SE C'E' BISOGNO DI RIMUOVERE I NaN
         
-        # Non convertire timestamp_capture in datetime qui, mantienilo come BIGINT per l'esportazione se preferisci
         # Oppure converti in un formato leggibile per CSV, ad esempio stringa ISO
         df['timestamp_capture'] = pd.to_datetime(df['timestamp_capture'], unit='us').dt.strftime('%Y-%m-%d %H:%M:%S.%f')
-
-
+        
         # Crea un buffer di memoria per il CSV
         output = io.StringIO()
         df.to_csv(output, index=False)
         csv_data = output.getvalue()
         output.close()
 
-        # Invia il CSV come allegato
-        response = Response(
-            csv_data,
-            mimetype="text/csv",
-            headers={"Content-Disposition": f"attachment;filename=raw_network_traffic_{int(time.time())}.csv"}
-        )
-        return response
+        # Genera un nome file univoco con il datetime della richiesta di esportazione
+        export_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_name = f"raw_network_traffic_export_{export_timestamp}.csv"
+        
+        # Carica il file su Google Cloud Storage
+        bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(file_name)
+        blob.upload_from_string(csv_data, content_type='text/csv')
+        
+        print(f"File '{file_name}' caricato con successo nel bucket GCS '{GCS_BUCKET_NAME}'.")
+
+        return jsonify({
+            "status": "success",
+            "message": f"Dati esportati con successo in '{file_name}' e caricati su Google Cloud Storage.",
+            "gcs_path": f"gs://{GCS_BUCKET_NAME}/{file_name}"
+        })
 
     except Exception as e:
         print(f"Errore durante l'esportazione CSV: {e}")
