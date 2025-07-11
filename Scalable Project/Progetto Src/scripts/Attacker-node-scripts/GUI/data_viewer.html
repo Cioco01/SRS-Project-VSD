@@ -5,14 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NetChaos Data Viewer</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f0f2f5; color: #333; line-height: 1.6; }
-        .container { background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 1200px; margin: 30px auto; }
-        h1 { color: #007bff; text-align: center; margin-bottom: 30px; font-weight: 600; }
-        h2 { color: #0056b3; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-top: 25px; margin-bottom: 20px; font-weight: 500; }
-        .section { margin-bottom: 30px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #fcfcfc; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
-        input[type="text"], input[type="number"], select {
-            width: calc(100% - 24px);
+        /* Base styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; /* Remove default body margin */
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 1400px; /* Increased max-width for wider screens */
+            margin: 30px auto;
+            box-sizing: border-box; /* Include padding in element's total width/height */
+        }
+
+        h1 {
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        h2 {
+            color: #0056b3;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+            margin-top: 25px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fcfcfc;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%; /* Make inputs take full width of their parent div */
             padding: 12px;
             margin-bottom: 15px;
             border: 1px solid #d4d4d4;
@@ -20,6 +67,7 @@
             box-sizing: border-box;
             font-size: 1em;
         }
+
         button {
             background-color: #28a745;
             color: white;
@@ -30,41 +78,89 @@
             font-size: 1em;
             margin-right: 10px;
             transition: background-color 0.3s ease;
+            white-space: nowrap; /* Prevent buttons from wrapping text */
         }
-        button:hover { background-color: #218838; }
-        .nav-button { background-color: #6c757d; }
-        .nav-button:hover { background-color: #5a6268; }
-        .export-button { background-color: #17a2b8; }
-        .export-button:hover { background-color: #138496; }
-        .clear-button { background-color: #dc3545; }
-        .clear-button:hover { background-color: #c82333; }
 
+        button:hover {
+            background-color: #218838;
+        }
+
+        .nav-button {
+            background-color: #6c757d;
+        }
+
+        .nav-button:hover {
+            background-color: #5a6268;
+        }
+
+        .export-button {
+            background-color: #17a2b8;
+        }
+
+        .export-button:hover {
+            background-color: #138496;
+        }
+
+        .clear-button {
+            background-color: #dc3545;
+        }
+
+        .clear-button:hover {
+            background-color: #c82333;
+        }
+
+        /* Filter Controls Layout */
+        .filter-controls {
+            display: grid; /* Use CSS Grid for flexible layout */
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Auto-fit columns, min 180px, max 1fr */
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .filter-controls button {
+            width: auto; /* Buttons take natural width */
+            margin-top: 15px; /* Align buttons below inputs */
+        }
+
+        /* Data Table Styles */
         .data-table-container {
             max-height: 500px;
+            overflow-x: auto; /* Allow horizontal scrolling for wide tables */
             overflow-y: auto;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
             margin-top: 20px;
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.9em;
+            min-width: 900px; /* Ensure table doesn't shrink too much on smaller screens */
         }
+
         th, td {
             padding: 12px 15px;
             border-bottom: 1px solid #ddd;
             text-align: left;
-            word-break: break-word; /* Ensure long content wraps */
+            word-break: break-word;
+            vertical-align: top; /* Align content to the top in cells */
         }
+
         th {
             background-color: #f8f8f8;
             font-weight: bold;
             position: sticky;
             top: 0;
             z-index: 1;
+            white-space: nowrap; /* Prevent header text from wrapping too much */
         }
-        tr:hover { background-color: #f1f1f1; }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* Status and Response sections */
         .status-section {
             padding: 10px;
             background-color: #d4edda;
@@ -74,7 +170,12 @@
             margin-bottom: 20px;
             text-align: center;
         }
-        .status-section h3 { margin: 0; color: #155724; }
+
+        .status-section h3 {
+            margin: 0;
+            color: #155724;
+        }
+
         #response {
             margin-top: 25px;
             padding: 15px;
@@ -86,16 +187,26 @@
             font-size: 0.9em;
             max-height: 400px;
             overflow-y: auto;
+            word-break: break-all; /* Ensures long lines of text break */
         }
-        .filter-controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .filter-controls > div {
-            flex: 1;
-            min-width: 180px;
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                padding: 15px;
+            }
+            .filter-controls {
+                grid-template-columns: 1fr; /* Stack filters vertically on small screens */
+            }
+            button {
+                width: 100%; /* Full width buttons on small screens */
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            .filter-controls button {
+                margin-top: 0; /* Reset margin for stacked buttons */
+            }
         }
     </style>
 </head>
@@ -112,7 +223,8 @@
         </div>
 
         <div class="section">
-            <h2>Captured Network Traffic (Raw)</h2> <div class="filter-controls">
+            <h2>Captured Network Traffic (Raw)</h2>
+            <div class="filter-controls">
                 <div>
                     <label for="filterProtocol">Protocol:</label>
                     <input type="text" id="filterProtocol" placeholder="e.g., TCP, UDP, ICMP">
@@ -123,7 +235,7 @@
                 </div>
                 <div>
                     <label for="filterDestinationIp">Destination IP:</label>
-                    <input type="text" id="filterDestinationIp" placeholder="e.0.0.0.10">
+                    <input type="text" id="filterDestinationIp" placeholder="e.g., 10.0.0.10">
                 </div>
                  <div>
                     <label for="filterSourcePort">Source Port:</label>
@@ -133,23 +245,34 @@
                     <label for="filterDestinationPort">Destination Port:</label>
                     <input type="number" id="filterDestinationPort" placeholder="e.g., 80, 3306">
                 </div>
-                <button onclick="fetchData()">Apply Filters</button>
-                <button onclick="clearFilters()">Clear Filters</button>
+                <div style="grid-column: span 2; display: flex; gap: 10px; justify-content: flex-start;">
+                    <button onclick="fetchData()">Apply Filters</button>
+                    <button class="nav-button" onclick="clearFilters()">Clear Filters</button>
+                </div>
             </div>
             
-            <button onclick="fetchData()">Refresh Data (Last 1000)</button>
-            <button class="export-button" onclick="exportCsv()">Export All to CSV</button>
-            <button class="clear-button" onclick="clearData()">Clear All Data in DB</button>
+            <div style="margin-bottom: 20px;">
+                <button onclick="fetchData()">Refresh Data (Last 1000)</button>
+                <button class="export-button" onclick="exportCsv()">Export All to CSV</button>
+                <button class="clear-button" onclick="clearData()">Clear All Data in DB</button>
+            </div>
 
             <div class="data-table-container">
                 <table id="dataTable">
                     <thead>
                         <tr>
-                            <th>Timestamp Capture</th> <th>Source IP</th>
+                            <th>Timestamp Capture</th>
+                            <th>Source IP</th>
                             <th>Destination IP</th>
-                            <th>Source Port</th> <th>Destination Port</th> <th>Protocol</th>
-                            <th>Packet Length</th> <th>Flags</th> <th>TTL</th> <th>Description</th>
-                            <th>Full Line</th> </tr>
+                            <th>Source Port</th>
+                            <th>Destination Port</th>
+                            <th>Protocol</th>
+                            <th>Packet Length</th>
+                            <th>Flags</th>
+                            <th>TTL</th>
+                            <th>Description</th>
+                            <th>Full Line</th>
+                        </tr>
                     </thead>
                     <tbody>
                         </tbody>
@@ -198,17 +321,17 @@
             try {
                 const res = await fetch(`${dataViewerBackendUrl}/api/get_captured_data?${queryParams.toString()}`);
                 const data = await res.json();
-                responseDiv.textContent = JSON.stringify(data.status, null, 2);
-
+                
+                // Display only the message from the backend, not the entire status object
                 if (data.status === "success") {
+                    responseDiv.textContent = `Status: ${data.status}. Records fetched: ${data.data.length}`;
                     renderTable(data.data);
                 } else {
-                    // Adjust colspan for error message
+                    responseDiv.textContent = `Error: ${data.message || 'Unknown error'}`;
                     tableBody.innerHTML = `<tr><td colspan="11" style="color: red;">Error: ${data.message || 'Unknown error'}</td></tr>`;
                 }
             } catch (error) {
                 responseDiv.textContent = 'Error fetching data: ' + error.message;
-                // Adjust colspan for error message
                 tableBody.innerHTML = `<tr><td colspan="11" style="color: red;">Failed to load data: ${error.message}</td></tr>`;
                 console.error('Error:', error);
             }
@@ -219,7 +342,6 @@
             tableBody.innerHTML = ''; // Clear existing data
 
             if (data.length === 0) {
-                // Adjust colspan for no data message
                 tableBody.innerHTML = '<tr><td colspan="11">No data available.</td></tr>';
                 return;
             }
@@ -227,8 +349,10 @@
             data.forEach(row => {
                 const tr = document.createElement('tr');
                 // Ensure field names match database columns (after Python processing)
+                // Use || '' for values that might be null/None from backend to display empty string
                 tr.innerHTML = `
-                    <td>${new Date(row.timestamp_capture / 1000).toLocaleString()}</td> <td>${row.source_ip || ''}</td>
+                    <td>${new Date(row.timestamp_capture / 1000).toLocaleString()}</td>
+                    <td>${row.source_ip || ''}</td>
                     <td>${row.destination_ip || ''}</td>
                     <td>${row.source_port || ''}</td>
                     <td>${row.destination_port || ''}</td>

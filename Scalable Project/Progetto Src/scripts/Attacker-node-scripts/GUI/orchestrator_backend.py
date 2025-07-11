@@ -28,12 +28,12 @@ ATTACKER_AGENT_URL = "http://127.0.0.1:5001" # Base URL, gli endpoint saranno /a
 TRAFFIC_GENERATOR_AGENT_URL = "http://127.0.0.1:5002" # Base URL, gli endpoint saranno /start_traffic_generation, /status
 TRAFFIC_CAPTURE_AGENT_URL = "http://127.0.0.1:5003" # Nuovo URL per il traffic capture agent
 
-GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'your-gcp-project-id')
-GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', 'your-gcs-bucket-name')
-CLOUDSQL_CONNECTION_NAME = os.environ.get('CLOUDSQL_CONNECTION_NAME', 'your-project-id:your-region:your-cloudsql-instance-name')
-CLOUDSQL_DATABASE_NAME = os.environ.get('CLOUDSQL_DATABASE_NAME', 'simulation_data')
-CLOUDSQL_USER_NAME = os.environ.get('CLOUDSQL_USER_NAME', 'simuser')
-CLOUDSQL_USER_PASSWORD = os.environ.get('CLOUDSQL_USER_PASSWORD', 'password123!') # USA SECRET MANAGER IN PRODUZIONE!
+GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID')
+GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME')
+CLOUDSQL_CONNECTION_NAME = os.environ.get('CLOUDSQL_CONNECTION_NAME')
+CLOUDSQL_DATABASE_NAME = os.environ.get('CLOUDSQL_DATABASE_NAME')
+CLOUDSQL_USER_NAME = os.environ.get('CLOUDSQL_USER_NAME')
+CLOUDSQL_USER_PASSWORD = os.environ.get('CLOUDSQL_USER_PASSWORD') # USA SECRET MANAGER IN PRODUZIONE!
 
 # Mappatura dei nomi logici delle VM ai loro IP
 TARGET_IPS = {
@@ -69,21 +69,25 @@ def create_network_events_table(conn):
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS network_events (
+            CREATE TABLE IF NOT EXISTS raw_network_traffic (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                timestamp BIGINT,
-                event_type VARCHAR(100),
-                source_ip VARCHAR(15),
-                destination_ip VARCHAR(15),
-                port INT,
-                protocol VARCHAR(10),
+                timestamp_capture BIGINT NOT NULL,
+                source_ip VARCHAR(45) NOT NULL,
+                destination_ip VARCHAR(45) NOT NULL,
+                source_port INT,
+                destination_port INT,
+                protocol VARCHAR(10) NOT NULL,
+                packet_length INT,
+                flags VARCHAR(20),
+                ttl INT,
                 description TEXT,
+                full_line TEXT NOT NULL,
                 ingestion_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.commit()
         cursor.close()
-        print("Tabella 'network_events' verificata/creata con successo.")
+        print("Tabella 'raw_network_traffic' verificata/creata con successo.")
         return True
     except Exception as e:
         print(f"Errore durante la creazione della tabella: {e}")
@@ -106,83 +110,6 @@ def call_agent_api(base_url, endpoint, method='GET', payload=None):
         print(f"Errore durante la chiamata a {url}: {e}")
         return {"status": "error", "message": f"Errore comunicazione con agente {url}: {str(e)}"}
 
-# --- Logica di Generazione e Salvataggio Dataset ---
-
-def collect_and_store_dataset(duration_seconds):
-    """
-    Questa funzione ora non "raccoglie" direttamente, ma si assicura che il traffic_capture_agent
-    stia salvando i dati nel DB per la durata.
-    """
-    print(f"Avvio coordinamento dataset per {duration_seconds} secondi...")
-
-    # Non c'è bisogno di raccogliere eventi dal Capture Agent,
-    # poiché il Traffic Capture Agent salverà direttamente nel DB.
-
-    # Qui potresti chiamare il Traffic Capture Agent per avviarlo se non è già stato fatto.
-    # Questo è meglio farlo all'inizio della simulazione
-    # Non è necessario qui perché il traffic_capture_agent gira in background e salva.
-    # collect_and_store_dataset è più per la gestione di "cosa fare DOPO la cattura"
-
-    print(f"Traffic Capture Agent dovrebbe stare salvando dati nel DB.")
-    # Se hai un GCS_BUCKET_NAME e vuoi ancora salvare un CSV riassuntivo (es. da DB):
-    # Dopo la simulazione, potresti voler esportare un CSV dal DB (raw_network_traffic)
-    # e caricarlo su GCS.
-
-    # Esempio per esportare dal DB dopo la cattura
-    # (Questo è un esempio, la logica potrebbe essere più complessa per query grandi)
-    # conn = get_cloudsql_conn()
-    # if conn:
-    #     df = pd.read_sql_query("SELECT * FROM raw_network_traffic ORDER BY timestamp_capture DESC LIMIT 10000", conn)
-    #     conn.close()
-    #     # ... (logica per salvare df su CSV e poi GCS) ...
-    # else:
-    #     print("Impossibile connettersi al DB per esportare il dataset finale.")
-
-    return {"status": "success", "message": "La cattura del traffico è gestita dal Traffic Capture Agent."}
-
-    # 4. Carica su Cloud Storage
-    try:
-        storage_client = storage.Client(project=GCP_PROJECT_ID)
-        bucket = storage_client.bucket(GCS_BUCKET_NAME)
-        blob = bucket.blob(csv_filename)
-        blob.upload_from_filename(local_csv_path)
-        print(f"Dataset caricato su Cloud Storage: gs://{GCS_BUCKET_NAME}/{csv_filename}")
-    except Exception as e:
-        print(f"Errore caricamento su Cloud Storage: {e}")
-        return {"status": "error", "message": f"Errore caricamento GCS: {str(e)}"}
-
-    # 5. Inserisci i dati nel database Cloud SQL
-    try:
-        conn = get_cloudsql_conn()
-        if conn:
-            if not create_network_events_table(conn):
-                raise Exception("Impossibile creare/verificare la tabella Cloud SQL.")
-
-            cursor = conn.cursor()
-            # Converte il DataFrame in una lista di tuple per l'inserimento
-            data_to_insert = df[['timestamp', 'event_type', 'source_ip', 'destination_ip', 'port', 'protocol', 'description']].values.tolist()
-            insert_query = """
-                INSERT INTO network_events (timestamp, event_type, source_ip, destination_ip, port, protocol, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.executemany(insert_query, data_to_insert)
-            conn.commit()
-            print(f"Inseriti {len(data_to_insert)} record in Cloud SQL.")
-            cursor.close()
-            conn.close()
-        else:
-            raise Exception("Impossibile stabilire la connessione a Cloud SQL per l'inserimento dati.")
-    except Exception as e:
-        print(f"Errore durante l'inserimento dati in Cloud SQL: {e}")
-        return {"status": "error", "message": f"Errore inserimento Cloud SQL: {str(e)}"}
-    finally:
-        if os.path.exists(local_csv_path):
-            os.remove(local_csv_path)
-            print(f"File temporaneo {local_csv_path} eliminato.")
-
-    return {"status": "success", "gcs_path": f"gs://{GCS_BUCKET_NAME}/{csv_filename}", "records_inserted": len(all_captured_events)}
-
-# --- API Endpoints per la GUI ---
 
 @app.route('/')
 def index():
@@ -191,11 +118,23 @@ def index():
 
 @app.route('/api/start_simulation', methods=['POST'])
 def start_simulation_endpoint():
-    # ... (logica esistente) ...
+   
+    data = request.get_json()
+    if not data or 'simulation_duration_seconds' not in data:
+        return jsonify({"status": "error", "message": "Durata della simulazione non specificata."}), 400    
 
+    simulation_duration = data.get('simulation_duration_seconds', 120) # Default a 120 secondi se non specificato
+
+    # Converti a intero e valida (buona pratica)
+    try:
+        simulation_duration = int(simulation_duration)
+        if simulation_duration <= 0:
+            return jsonify({"status": "error", "message": "Simulation duration must be a positive number"}), 400
+    except ValueError:
+        return jsonify({"status": "error", "message": "Simulation duration must be an integer"}), 400
+
+    
     def run_full_simulation():
-        # ... (logica esistente di traffico e attacchi) ...
-
         # 1. Avvia la cattura del traffico effettiva all'inizio della simulazione
         print("Avvio cattura traffico tramite Traffic Capture Agent...")
         capture_start_response = call_agent_api(TRAFFIC_CAPTURE_AGENT_URL, "/start_capture", method='POST', payload={"interface": "eth0"})
@@ -213,10 +152,6 @@ def start_simulation_endpoint():
         capture_stop_response = call_agent_api(TRAFFIC_CAPTURE_AGENT_URL, "/stop_capture", method='POST')
         print(f"Traffic Capture Agent Stop Response: {capture_stop_response}")
 
-        # 4. A questo punto, i dati dovrebbero essere nel database 'raw_network_traffic'
-        # Qui potresti chiamare una funzione per generare report o esportare dati dal DB.
-        # collect_and_store_dataset(0) # Questo potrebbe essere usato per generare un CSV riassuntivo dal DB
-
         print("Simulazione completa terminata. Dati traffico nel database.")
         # ... (logica per GCS se vuoi un CSV riassuntivo del traffico catturato) ...
 
@@ -225,11 +160,13 @@ def start_simulation_endpoint():
 
 @app.route('/api/status', methods=['GET'])
 def get_orchestrator_status():
-    # ... (logica esistente) ...
+       # Inizializza le variabili all'inizio della funzione
+    orchestrator_status = {"status": "OK", "message": "Orchestrator is running."}
+    agent_statuses = {}
+
     agent_types = {
         "Attacker Agent": ATTACKER_AGENT_URL,
         "Traffic Generator Agent": TRAFFIC_GENERATOR_AGENT_URL,
-        # "Capture Agent": CAPTURE_AGENT_URL, # Rimuovi o rinomina il vecchio Capture Agent
         "Traffic Capture Agent": TRAFFIC_CAPTURE_AGENT_URL # Aggiungi il nuovo
     }
 

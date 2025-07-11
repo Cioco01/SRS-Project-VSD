@@ -9,10 +9,12 @@ echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/nmap" | sudo tee /etc/sudoers
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/hydra" | sudo tee -a /etc/sudoers.d/hydra-allow
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/tcpdump" | sudo tee -a /etc/sudoers.d/tcpdump-allow # Per potenziale cattura traffico
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/sbin/tcpdump" | sudo tee -a /etc/sudoers.d/tcpdump-allow
+echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/screen" | sudo tee -a /etc/sudoers.d/screen-allow
+echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/dsniff" | sudo tee -a /etc/sudoers.d/dsniff-allow
 
 # Aggiorna i pacchetti e installa le dipendenze base
 sudo apt-get update
-sudo apt-get install -y nmap hydra python3 python3-pip git screen nginx tcpdump # Aggiunto tcpdump
+sudo apt-get install -y nmap hydra python3 python3-pip git screen nginx tcpdump dsniff
 
 # Installa le librerie Python necessarie
 # Ho rimosso 'google-cloud-sql' che non esiste e aggiunto 'google-api-python-client' se dovesse servire per altre API
@@ -21,7 +23,7 @@ pip3 install --user requests paramiko python-nmap flask google-cloud-storage clo
 
 # Variabili d'ambiente (popolate da Terraform)
 # Queste saranno usate dagli script Python.
-export GCP_PROJECT_ID="gruppo-9-456912" # Il tuo ID progetto
+export GCP_PROJECT_ID="gruppo-9-456912" #"${gcp_project_id}"
 export CLOUDSQL_CONNECTION_NAME="gruppo-9-456912:europe-west1:simulation-db-instance" # Il tuo Cloud SQL connection name
 export CLOUDSQL_DATABASE_NAME="simulation_data" # ASSICURATI CHE SIA simulation_data e non data-viewer-db
 export CLOUDSQL_USER_NAME="simuser" # Il tuo utente Cloud SQL
@@ -31,11 +33,11 @@ export CLOUDSQL_USER_PASSWORD="password" # La tua password Cloud SQL
 # Questi IP sono impostati da Terraform e passati come variabili d'ambiente
 # In terrraform, puoi usare `output` per esportarli, QUINDI CAMBIARE OUTPUT
 
-#export WEB_SERVER_IP="${web_server_ip}"
-#export DB_SERVER_IP="${db_server_ip}"
-#export INTERNAL_CLIENT_IP="${internal_client_ip}"
-#export ATTACKER_NODE_IP="${attacker_node_ip}" # L'IP interno di questa stessa VM
-#export GCP_PROJECT_ID="${gcp_project_id}"
+export WEB_SERVER_IP="10.0.1.4"  #"${web_server_ip}"
+export DB_SERVER_IP="10.0.3.2"  #"${db_server_ip}"
+export INTERNAL_CLIENT_IP="10.0.2.2"  #"${internal_client_ip}"
+export ATTACKER_NODE_IP="10.0.1.3" #"${attacker_node_ip}" # L'IP interno di questa stessa VM
+export DNS_SERVER_IP="10.0.1.2" #"${dns_server_ip}"
 #export GCS_BUCKET_NAME="${gcs_bucket_name}"
 #export CLOUDSQL_CONNECTION_NAME="${cloudsql_connection_name}"
 #export CLOUDSQL_DATABASE_NAME="${cloudsql_database_name}"

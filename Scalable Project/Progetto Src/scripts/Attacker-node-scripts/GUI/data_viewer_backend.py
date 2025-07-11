@@ -94,8 +94,12 @@ def get_captured_data():
         # Non convertire timestamp_capture in datetime qui, gestiscilo nel frontend con JavaScript
         # df['timestamp_capture'] è già un BIGINT (microsecondi), passalo così al frontend
 
+        df = df.fillna('-')  # Riempi i NaN con stringhe vuote per JSON compatibile
         # Rimuovi l'indice e converti in lista di dizionari per JSON
         data = df.to_dict(orient='records')
+        
+        
+
 
         return jsonify({"status": "success", "data": data})
 
@@ -129,6 +133,9 @@ def export_csv():
             ORDER BY timestamp_capture DESC
         """
         df = pd.read_sql(query, conn)
+        
+        df = clean_numeric_data(df)
+
         
         # Non convertire timestamp_capture in datetime qui, mantienilo come BIGINT per l'esportazione se preferisci
         # Oppure converti in un formato leggibile per CSV, ad esempio stringa ISO

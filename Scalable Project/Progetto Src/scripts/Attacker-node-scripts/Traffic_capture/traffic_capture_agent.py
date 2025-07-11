@@ -126,10 +126,14 @@ def parse_tcpdump_line(line):
             data['protocol'] = 'TCP'
         elif 'UDP,' in line:
             data['protocol'] = 'UDP'
+        elif 'udp,' in line:
+            data['protocol'] = 'UDP'
         elif 'ICMP,' in line:
             data['protocol'] = 'ICMP'
         elif 'ARP,' in line:
             data['protocol'] = 'ARP'
+        else:
+            data['protocol'] = ' - '
 
     # Extract packet length (if -l is used, length is often at the beginning of the line after ethertype)
     length_match = re.search(r'length (\d+):', line)
@@ -151,7 +155,7 @@ def parse_tcpdump_line(line):
 
     return data
 
-def capture_traffic_and_store_loop(interface='eth0'):
+def capture_traffic_and_store_loop():
     """
     Cattura il traffico di rete e lo salva nel database.
     tcpdump -l: Line-buffered output
@@ -164,11 +168,11 @@ def capture_traffic_and_store_loop(interface='eth0'):
 
     # Monitora l'interfaccia interna (subnet DMZ e private)
     # L'IP dell'attacker-node-01 è 10.0.1.3
-    # L'interfaccia corretta dovrebbe essere quella collegata alla netchaos_vpc (es. eth0)
+    # L'interfaccia corretta dovrebbe essere quella collegata alla netchaos_vpc (es. ens4)
     # Se vuoi catturare tutto il traffico interno, non specificare un host.
     # Ma se vuoi solo il traffico che passa attraverso questa macchina o la riguarda,
     # potresti voler aggiungere filtri.
-    # tcpdump -i eth0 -n -tttt -vvv -e -l # Cattura tutto su eth0
+    # tcpdump -i ens4 -n -tttt -vvv -e -l # Cattura tutto su ens4
 
     # Filtro BPF per escludere il traffico SSH di gestione (se stai usando SSH sulla stessa interfaccia)
     # e il traffico verso l'IP pubblico dell'attacker-node, concentrandoti sulla rete interna.
@@ -187,15 +191,15 @@ def capture_traffic_and_store_loop(interface='eth0'):
     # Per semplicità, inizialmente potresti catturare tutto e filtrare in Python.
     # filter_expression = f"not (host 127.0.0.1) and net 10.0.0.0/8" # Cattura traffico interno
     # O più semplice per il traffico IN/OUT della VM sull'interfaccia di rete interna
-    filter_expression = "" # Lasciamo vuoto per catturare tutto su eth0, poi filtriamo in Python.
-                           # O possiamo specificare l'interfaccia di rete VPC es. eth0
-                           # tcpdump -i eth0 ...
+    filter_expression = "src net 10.0.0.0/8 and dst net 10.0.0.0/8" # Lasciamo vuoto per catturare tutto su ens4, poi filtriamo in Python.
+                           # O possiamo specificare l'interfaccia di rete VPC es. ens4
+                           # tcpdump -i ens4 ...
 
-    print(f"Avvio cattura traffico con tcpdump su interfaccia {interface}...")
+    print(f"Avvio cattura traffico con tcpdump su interfaccia ens4...")
 
     # Assicurati che l'utente 'cristian_ciocoiu' possa eseguire tcpdump senza password (già fatto nello startup script)
-    # sudo tcpdump -i eth0 -n -tttt -vvv -e -l
-    cmd = ['sudo', 'tcpdump', '-i', interface, '-n', '-tttt', '-vvv', '-e', '-l', filter_expression]
+    # sudo tcpdump -i ens4 -n -tttt -vvv -e -l
+    cmd = ['tcpdump', '-i', 'ens4', '-n', '-tttt', '-vvv', '-e', '-l', filter_expression]
     
     tcpdump_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
 
@@ -214,6 +218,8 @@ def capture_traffic_and_store_loop(interface='eth0'):
         # e interagiscono tra loro su 127.0.0.1.
         if "127.0.0.1" in line: # Exclude localhost traffic
              continue
+         
+        
 
         # Parsing della riga
         parsed_data = parse_tcpdump_line(line)
@@ -250,14 +256,12 @@ def start_capture():
     global tcpdump_process, capture_thread, stop_capture_event
     if tcpdump_process is not None and tcpdump_process.poll() is None:
         return jsonify({"status": "error", "message": "Cattura traffico già in corso."}), 400
-
-    interface = request.json.get('interface', 'eth0') # Interfaccia di rete da monitorare
-    
+   
     stop_capture_event.clear()
-    capture_thread = threading.Thread(target=capture_traffic_and_store_loop, args=(interface,))
+    capture_thread = threading.Thread(target=capture_traffic_and_store_loop)
     capture_thread.daemon = True # Permetti al thread di terminare con l'applicazione Flask
     capture_thread.start()
-    return jsonify({"status": "success", "message": f"Cattura traffico avviata su {interface}."})
+    return jsonify({"status": "success", "message": f"Cattura traffico avviata su ens4."})
 
 @app.route('/stop_capture', methods=['POST'])
 def stop_capture():
