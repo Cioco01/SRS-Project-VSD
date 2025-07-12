@@ -110,6 +110,51 @@ def call_agent_api(base_url, endpoint, method='GET', payload=None):
         print(f"Errore durante la chiamata a {url}: {e}")
         return {"status": "error", "message": f"Errore comunicazione con agente {url}: {str(e)}"}
 
+# Coordina l'esecuzione degli attacchi
+def coordinate_attacks(attacks_list, simulation_duration):
+    """
+    Coordina l'esecuzione degli attacchi pianificati inviando richieste all'Attacker Agent.
+    """
+    if not attacks_list:
+        print("Nessun attacco da coordinare.")
+        return
+
+    print(f"Coordinamento di {len(attacks_list)} attacchi.")
+
+    attack_threads = []
+    
+    for attack_config in attacks_list:
+        attack_type = attack_config.get('attack_type')
+        target_name = attack_config.get('target_name')
+        params = attack_config.get('params', {})
+
+        target_ip = TARGET_IPS.get(target_name)
+        if not target_ip:
+            print(f"ATTENZIONE: Target '{target_name}' non trovato per l'attacco '{attack_type}'. Saltato.")
+            continue
+
+        # Costruisci il payload per l'Attacker Agent
+        # L'endpoint sull'Attacker Agent sarà /attack, e il payload conterrà i dettagli.
+        attack_payload = {
+            "attack_type": attack_type,
+            "target_ip": target_ip,
+            "duration_seconds": simulation_duration, # Assumiamo che l'attacco duri quanto la simulazione
+            "params": params
+        }
+
+        # Lancia ogni attacco in un thread separato per eseguirli in parallelo
+        def run_single_attack(payload):
+            print(f"Avvio attacco '{payload['attack_type']}' su {payload['target_ip']}...")
+            response = call_agent_api(ATTACKER_AGENT_URL, "/attack", method='POST', payload=payload)
+            print(f"Risposta Attacker Agent per {payload['attack_type']}: {response}")
+
+        thread = threading.Thread(target=run_single_attack, args=(attack_payload,))
+        attack_threads.append(thread)
+        thread.start()
+        # Aggiungi un piccolo ritardo tra l'avvio dei thread se vuoi scaglionarli
+        time.sleep(1) 
+    
+    print("Tutti gli attacchi sono stati lanciati.")
 
 @app.route('/')
 def index():
@@ -124,7 +169,9 @@ def start_simulation_endpoint():
         return jsonify({"status": "error", "message": "Durata della simulazione non specificata."}), 400    
 
     simulation_duration = data.get('simulation_duration_seconds', 120) # Default a 120 secondi se non specificato
+    attacks_to_schedule = data.get('attacks', []) # <--- RECUPERA GLI ATTACCHI DA QUI
 
+    
     # Converti a intero e valida (buona pratica)
     try:
         simulation_duration = int(simulation_duration)
@@ -143,11 +190,14 @@ def start_simulation_endpoint():
             print("ERRORE: Impossibile avviare la cattura traffico. La simulazione potrebbe non essere registrata correttamente.")
             # Gestire l'errore, magari fermare la simulazione o inviare una notifica
 
-        # 2. Lascia che la simulazione si svolga per la durata specificata
-        print(f"Simulazione attiva... attendendo {simulation_duration} secondi.")
-        time.sleep(simulation_duration + 5) # Un piccolo buffer
+        # 2. Avvia gli attacchi programmati
+        coordinate_attacks(attacks_to_schedule, simulation_duration)
 
-        # 3. Ferma la cattura del traffico
+        # 3. Lascia che la simulazione si svolga per la durata specificata
+        print(f"Simulazione attiva... attendendo {simulation_duration} secondi.")
+        time.sleep(simulation_duration)
+
+        # 4. Ferma la cattura del traffico
         print("Invio comando per fermare la cattura traffico...")
         capture_stop_response = call_agent_api(TRAFFIC_CAPTURE_AGENT_URL, "/stop_capture", method='POST')
         print(f"Traffic Capture Agent Stop Response: {capture_stop_response}")

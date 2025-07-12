@@ -5,7 +5,7 @@ echo "Inizio setup Attacker/Orchestrator Node..."
 export HOME="/home/cristian_ciocoiu/" # Assicurati che HOME sia impostato correttamente per l'utente gcp-user
 
 # Abilita i privilegi sudo per il servizio Nmap e Hydra e altri potenziali strumenti
-echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/nmap" | sudo tee /etc/sudoers.d/nmap-allow
+echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/nmap" | sudo tee -a /etc/sudoers.d/nmap-allow
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/hydra" | sudo tee -a /etc/sudoers.d/hydra-allow
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/tcpdump" | sudo tee -a /etc/sudoers.d/tcpdump-allow # Per potenziale cattura traffico
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/sbin/tcpdump" | sudo tee -a /etc/sudoers.d/tcpdump-allow
