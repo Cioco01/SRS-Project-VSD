@@ -5,6 +5,7 @@ import time
 import os
 from datetime import datetime
 import re # Per parsing tcpdump
+import signal
 
 # Google Cloud SQL Connector
 from google.cloud.sql.connector import Connector
@@ -46,7 +47,6 @@ def get_cloudsql_conn():
     except Exception as e:
         print(f"Errore durante la connessione a Cloud SQL per Traffic Capture Agent: {e}")
         return None
-
 def insert_traffic_data(data_list):
     """Inserisce una lista di record di traffico nel database raw_network_traffic."""
     if not data_list:
@@ -61,14 +61,14 @@ def insert_traffic_data(data_list):
                 INSERT INTO raw_network_traffic (
                     timestamp_capture, source_ip, destination_ip,
                     source_port, destination_port, protocol,
-                    packet_length, flags, ttl, description, full_line
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    packet_length, flags, ttl, description, full_line, ingestion_time
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             # Converte i dizionari in tuple nell'ordine della query
             data_to_insert = [
                 (d.get('timestamp_capture'), d.get('source_ip'), d.get('destination_ip'),
                  d.get('source_port'), d.get('destination_port'), d.get('protocol'),
-                 d.get('packet_length'), d.get('flags'), d.get('ttl'), d.get('description'), d.get('full_line'))
+                 d.get('packet_length'), d.get('flags'), d.get('ttl'), d.get('description'), d.get('full_line'), d.get('ingestion_time'))
                 for d in data_list
             ]
             cursor.executemany(insert_query, data_to_insert)
@@ -101,7 +101,8 @@ def parse_tcpdump_line(line):
         'flags': '', #None 
         'ttl': None,
         'description': '',
-        'full_line': line.strip() #line #codicevecchio
+        'full_line': line.strip(), #line #codicevecchio
+        'ingestion_time': datetime.now() #AGGIUNTA QUESTA RIGA LOLLO 
     }
 
     # Timestamp (unix timestamp from relative, or use current time if relative not parsed)
@@ -117,7 +118,7 @@ def parse_tcpdump_line(line):
         except ValueError:
             logger.warning(f"Impossibile parsare la lunghezza del pacchetto dalla riga: {line.strip()}")
             data['packet_length'] = None
-    #-------- A QUI-------	
+    #-------- A QUI-------
     # Try to extract IP addresses and ports
     ip_port_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d+)\s*>\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d+):', line)
     if ip_port_match:
@@ -133,11 +134,13 @@ def parse_tcpdump_line(line):
     else: # Fallback to a broader pattern for common protocols
         if 'Flags [' in line and 'UDP' not in line:
             data['protocol'] = 'TCP'
-        elif 'UDP,' in line:
+        elif 'UDP' in line:
             data['protocol'] = 'UDP'
-        elif 'ICMP,' in line:
+        elif 'ICMP' in line:
             data['protocol'] = 'ICMP'
-        elif 'ARP,' in line:
+        elif 'udp' in line:
+            data['protocol'] = 'UDP'
+        elif 'ARP' in line:
             data['protocol'] = 'ARP'
 
     # Extract packet length (if -l is used, length is often at the beginning of the line after ethertype)
@@ -223,7 +226,7 @@ def capture_traffic_and_store_loop(interface='ens4'):
         print(f"ERRORE TCPDUMP IMMEDIATO (STDERR): {stderr_immediate}")
     # Considera di terminare qui o di loggare in modo più severo se questo è un errore critico
     else:
-        print("DEBUG: Nessun errore immediato su stderr da tcpdump.")	
+        print("DEBUG: Nessun errore immediato su stderr da tcpdump.")
     for line in iter(tcpdump_process.stdout.readline, ''):
         if stop_capture_event.is_set():
             print("Segnale di stop ricevuto. Termino cattura tcpdump.")
@@ -292,13 +295,24 @@ def stop_capture():
 
     stop_capture_event.set() # Segnala al thread di cattura di fermarsi
     # tcpdump_process.terminate() # Invia SIGTERM a tcpdump
-    tcpdump_process.send_signal(subprocess.SIGINT) # Invia CTRL+C a tcpdump per una chiusura più pulita
-    
+    try: # <--- AGGIUNGI UN TRY-EXCEPT QUI per robustezza
+        # Modifica la riga seguente:
+        tcpdump_process.send_signal(signal.SIGINT) # <--- MODIFICATO DA subprocess.SIGINT a signal.SIGINT
+        print("Inviato SIGINT a tcpdump_process.")
+    except Exception as e:
+        print(f"ATTENZIONE: Errore nell'invio di SIGINT a tcpdump: {e}")
+        # Se tcpdump è già terminato, potrebbe dare errore, ma non deve bloccare il reset dello stato
+        # Potresti anche usare tcpdump_process.terminate() che è più generico
+        # o semplicemente un tcpdump_process.kill() come ultima risorsa.
+
     # Aspetta un breve periodo che il thread di cattura si pulisca
     if capture_thread and capture_thread.is_alive():
+        print("Attendendo la terminazione del thread di cattura...")
         capture_thread.join(timeout=5)
+        if capture_thread.is_alive():
+            print("Il thread di cattura non è terminato entro il timeout.")
 
-    tcpdump_process = None # Resetta lo stato
+    tcpdump_process = None # Resetta lo stato solo dopo il tentativo di chiusura
     return jsonify({"status": "success", "message": "Cattura traffico terminata."})
 
 @app.route('/status', methods=['GET'])

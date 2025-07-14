@@ -11,10 +11,11 @@ echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/tcpdump" | sudo tee -a /etc/s
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/sbin/tcpdump" | sudo tee -a /etc/sudoers.d/tcpdump-allow
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/screen" | sudo tee -a /etc/sudoers.d/screen-allow
 echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/dsniff" | sudo tee -a /etc/sudoers.d/dsniff-allow
+echo "cristian_ciocoiu ALL=(ALL) NOPASSWD:/usr/bin/hping3" | sudo tee -a /etc/sudoers.d/hping3-allow
 
 # Aggiorna i pacchetti e installa le dipendenze base
 sudo apt-get update
-sudo apt-get install -y nmap hydra python3 python3-pip git screen nginx tcpdump dsniff
+sudo apt-get install -y nmap hydra python3 python3-pip git screen nginx tcpdump dsniff hping3
 
 # Installa le librerie Python necessarie
 # Ho rimosso 'google-cloud-sql' che non esiste e aggiunto 'google-api-python-client' se dovesse servire per altre API
@@ -99,3 +100,9 @@ screen -dmS data_viewer_backend bash -c "cd ${SCRIPT_DIR} && python3 data_viewer
 echo "Data Viewer Backend avviato."
 
 echo "Attacker/Orchestrator Node Setup Complete."
+
+
+## DA FARE COME CODICE PER OGNI VM PER SSH:
+# Abilita SSH 
+# sudo sed -i 's/^#\?PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+# sudo systemctl restart ssh

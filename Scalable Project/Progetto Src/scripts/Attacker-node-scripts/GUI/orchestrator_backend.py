@@ -1,33 +1,32 @@
-# security-sim-project/scripts/orchestrator_backend.py
 from flask import Flask, request, jsonify, send_from_directory
 import requests
 import json
 import time
 import threading
 import os
-import pandas as pd # Per l'elaborazione dei dati
+import pandas as pd
 
 # Google Cloud Imports
 from google.cloud import storage
 from google.cloud.sql.connector import Connector
 import pymysql
 
-app = Flask(__name__, static_folder='static') # Indica a Flask dove trovare i file statici
+app = Flask(__name__, static_folder='static', static_url_path='/') # Indica a Flask dove trovare i file statici
 
 # --- Configurazione Globale ---
-# Queste variabili sono popolate dallo startup script di Terraform (attacker_orchestrator_startup.sh)
 
-# IP delle VM target (leggi da variabili d'ambiente)
+# IP delle VM target 
 WEB_SERVER_IP = os.environ.get('WEB_SERVER_IP', '10.0.1.10')
 DB_SERVER_IP = os.environ.get('DB_SERVER_IP', '10.0.3.10')
 INTERNAL_CLIENT_IP = os.environ.get('INTERNAL_CLIENT_IP', '10.0.2.10')
 DNS_SERVER_IP = os.environ.get('DNS_SERVER_IP', '8.8.8.8') # Assicurati che sia configurato!
 
-# URL degli agenti Flask (tutti sulla stessa VM, quindi localhost)
+# URL degli agenti Flask
 ATTACKER_AGENT_URL = "http://127.0.0.1:5001" # Base URL, gli endpoint saranno /attack, /status
 TRAFFIC_GENERATOR_AGENT_URL = "http://127.0.0.1:5002" # Base URL, gli endpoint saranno /start_traffic_generation, /status
 TRAFFIC_CAPTURE_AGENT_URL = "http://127.0.0.1:5003" # Nuovo URL per il traffic capture agent
 
+# Configurazione Cloud SQL e GCS
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID')
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME')
 CLOUDSQL_CONNECTION_NAME = os.environ.get('CLOUDSQL_CONNECTION_NAME')
@@ -40,13 +39,11 @@ TARGET_IPS = {
     "web-server": WEB_SERVER_IP,
     "db-server": DB_SERVER_IP,
     "internal-client": INTERNAL_CLIENT_IP,
-    "dns-server": DNS_SERVER_IP # Per le query DNS se non è 8.8.8.8
+    "dns-server": DNS_SERVER_IP
 }
 
 # --- Cloud SQL Connector Setup ---
 connector = Connector()
-# Global connection pool (opzionale, per connessioni più efficienti)
-# db_connection_pool = None # Potresti inizializzarlo qui
 
 def get_cloudsql_conn():
     """Stabilisce una connessione al database Cloud SQL."""
@@ -110,11 +107,7 @@ def call_agent_api(base_url, endpoint, method='GET', payload=None):
         print(f"Errore durante la chiamata a {url}: {e}")
         return {"status": "error", "message": f"Errore comunicazione con agente {url}: {str(e)}"}
 
-# Coordina l'esecuzione degli attacchi
 def coordinate_attacks(attacks_list, simulation_duration):
-    """
-    Coordina l'esecuzione degli attacchi pianificati inviando richieste all'Attacker Agent.
-    """
     if not attacks_list:
         print("Nessun attacco da coordinare.")
         return
@@ -133,8 +126,7 @@ def coordinate_attacks(attacks_list, simulation_duration):
             print(f"ATTENZIONE: Target '{target_name}' non trovato per l'attacco '{attack_type}'. Saltato.")
             continue
 
-        # Costruisci il payload per l'Attacker Agent
-        # L'endpoint sull'Attacker Agent sarà /attack, e il payload conterrà i dettagli.
+        # Payload per l'Attacker Agent
         attack_payload = {
             "attack_type": attack_type,
             "target_ip": target_ip,
@@ -142,16 +134,15 @@ def coordinate_attacks(attacks_list, simulation_duration):
             "params": params
         }
 
-        # Lancia ogni attacco in un thread separato per eseguirli in parallelo
+        # Si lancia ogni attacco in un thread separato per eseguirli in parallelo
         def run_single_attack(payload):
             print(f"Avvio attacco '{payload['attack_type']}' su {payload['target_ip']}...")
             response = call_agent_api(ATTACKER_AGENT_URL, "/attack", method='POST', payload=payload)
             print(f"Risposta Attacker Agent per {payload['attack_type']}: {response}")
-
         thread = threading.Thread(target=run_single_attack, args=(attack_payload,))
         attack_threads.append(thread)
         thread.start()
-        # Aggiungi un piccolo ritardo tra l'avvio dei thread se vuoi scaglionarli
+        # Piccolo ritardo tra l'avvio dei thread
         time.sleep(1) 
     
     print("Tutti gli attacchi sono stati lanciati.")
@@ -169,10 +160,10 @@ def start_simulation_endpoint():
         return jsonify({"status": "error", "message": "Durata della simulazione non specificata."}), 400    
 
     simulation_duration = data.get('simulation_duration_seconds', 120) # Default a 120 secondi se non specificato
-    attacks_to_schedule = data.get('attacks', []) # <--- RECUPERA GLI ATTACCHI DA QUI
+    attacks_to_schedule = data.get('attacks', []) # Lista di attacchi da coordinare
 
     
-    # Converti a intero e valida (buona pratica)
+    # Converti a intero e valida
     try:
         simulation_duration = int(simulation_duration)
         if simulation_duration <= 0:
@@ -182,28 +173,26 @@ def start_simulation_endpoint():
 
     
     def run_full_simulation():
-        # 1. Avvia la cattura del traffico effettiva all'inizio della simulazione
+        # 1. Avviamento della cattura del traffico effettiva all'inizio della simulazione
         print("Avvio cattura traffico tramite Traffic Capture Agent...")
         capture_start_response = call_agent_api(TRAFFIC_CAPTURE_AGENT_URL, "/start_capture", method='POST', payload={"interface": "eth0"})
         print(f"Traffic Capture Agent Start Response: {capture_start_response}")
         if capture_start_response.get("status") == "error":
             print("ERRORE: Impossibile avviare la cattura traffico. La simulazione potrebbe non essere registrata correttamente.")
-            # Gestire l'errore, magari fermare la simulazione o inviare una notifica
 
-        # 2. Avvia gli attacchi programmati
+        # 2. Avviamento degli attacchi programmati
         coordinate_attacks(attacks_to_schedule, simulation_duration)
 
-        # 3. Lascia che la simulazione si svolga per la durata specificata
+        # 3. In attesa che la simulazione si svolga per la durata specificata
         print(f"Simulazione attiva... attendendo {simulation_duration} secondi.")
         time.sleep(simulation_duration)
 
-        # 4. Ferma la cattura del traffico
+        # 4. Si ferma la cattura del traffico
         print("Invio comando per fermare la cattura traffico...")
         capture_stop_response = call_agent_api(TRAFFIC_CAPTURE_AGENT_URL, "/stop_capture", method='POST')
         print(f"Traffic Capture Agent Stop Response: {capture_stop_response}")
 
         print("Simulazione completa terminata. Dati traffico nel database.")
-        # ... (logica per GCS se vuoi un CSV riassuntivo del traffico catturato) ...
 
     threading.Thread(target=run_full_simulation).start()
     return jsonify({"status": "accepted", "message": f"Simulazione completa avviata in background per {simulation_duration} secondi."})
@@ -216,8 +205,7 @@ def get_orchestrator_status():
 
     agent_types = {
         "Attacker Agent": ATTACKER_AGENT_URL,
-        "Traffic Generator Agent": TRAFFIC_GENERATOR_AGENT_URL,
-        "Traffic Capture Agent": TRAFFIC_CAPTURE_AGENT_URL # Aggiungi il nuovo
+        "Traffic Capture Agent": TRAFFIC_CAPTURE_AGENT_URL
     }
 
     for name, url in agent_types.items():
@@ -232,9 +220,20 @@ def get_orchestrator_status():
 
     return jsonify({"orchestrator": orchestrator_status, "agents": agent_statuses})
 
+@app.route('/api/attack_results', methods=['GET'])
+def get_attack_responses():
+    # Richiesta dei risultati degli attacchi dall'Attacker Agent
+    try:
+        response = requests.get(f"{ATTACKER_AGENT_URL}/attack_results", timeout=10)
+        response.raise_for_status()
+        return jsonify({
+            "status": "success",
+            "results": response.json().get("results")
+        })
+    except requests.exceptions.RequestException as e:
+        return jsonify({"status": "error", "message": f"Errore nel recupero dei risultati dall'Attacker Agent: {str(e)}"}), 500
 
 # --- Main Execution ---
 if __name__ == '__main__':
     print("Avvio Flask backend dell'Orchestratore su http://0.0.0.0:5000")
-    # Disabilita debug per non esporre informazioni sensibili in un ambiente di produzione
     app.run(host='0.0.0.0', port=5000, debug=False)

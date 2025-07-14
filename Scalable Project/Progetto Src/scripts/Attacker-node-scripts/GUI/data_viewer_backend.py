@@ -15,7 +15,7 @@ GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'gruppo-9-456912')
 CLOUDSQL_CONNECTION_NAME = os.environ.get('CLOUDSQL_CONNECTION_NAME', 'gruppo-9-456912:europe-west1:simulation-db-instance')
 CLOUDSQL_DATABASE_NAME = os.environ.get('CLOUDSQL_DATABASE_NAME', 'simulation_data')
 CLOUDSQL_USER_NAME = os.environ.get('CLOUDSQL_USER_NAME', 'simuser')
-CLOUDSQL_USER_PASSWORD = os.environ.get('CLOUDSQL_USER_PASSWORD', 'password') # USA SECRET MANAGER!
+CLOUDSQL_USER_PASSWORD = os.environ.get('CLOUDSQL_USER_PASSWORD', 'password') # Miglirore usare Secret Manager in produzione!
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', 'gruppo-9-456912-traffic-data')
 
 connector = Connector()
@@ -40,7 +40,6 @@ def get_cloudsql_conn():
 @app.route('/')
 def index():
     """Serve la pagina HTML della GUI del visualizzatore dati."""
-    # Assicurati che 'data_viewer.html' sia nella sottocartella 'static'
     return send_from_directory(app.static_folder, 'data_viewer.html')
 
 @app.route('/api/get_captured_data', methods=['GET'])
@@ -65,8 +64,8 @@ def get_captured_data():
         protocol = request.args.get('protocol')
         source_ip = request.args.get('source_ip')
         destination_ip = request.args.get('destination_ip')
-        source_port = request.args.get('source_port', type=int) # Converti in int
-        destination_port = request.args.get('destination_port', type=int) # Converti in int
+        source_port = request.args.get('source_port', type=int)
+        destination_port = request.args.get('destination_port', type=int)
         
         conditions = []
         params = []
@@ -80,10 +79,10 @@ def get_captured_data():
         if destination_ip:
             conditions.append("destination_ip = %s")
             params.append(destination_ip)
-        if source_port is not None: # Controlla anche per 0
+        if source_port is not None:
             conditions.append("source_port = %s")
             params.append(source_port)
-        if destination_port is not None: # Controlla anche per 0
+        if destination_port is not None:
             conditions.append("destination_port = %s")
             params.append(destination_port)
             
@@ -94,10 +93,8 @@ def get_captured_data():
 
         df = pd.read_sql(query, conn, params=params)
         
-        # Non convertire timestamp_capture in datetime qui, gestiscilo nel frontend con JavaScript
-        # df['timestamp_capture'] è già un BIGINT (microsecondi), passalo così al frontend
-
-        df = df.fillna('-')  # Riempi i NaN con stringhe vuote per JSON compatibile
+        # Riempi i NaN con stringhe vuote per JSON compatibile
+        df = df.fillna('-')
         # Rimuovi l'indice e converti in lista di dizionari per JSON
         data = df.to_dict(orient='records')
         
@@ -108,7 +105,6 @@ def get_captured_data():
 
     except pd.io.sql.DatabaseError as e:
         print(f"Errore query database: {e}")
-        # Messaggio di errore più generico o specifico per la nuova tabella
         return jsonify({"status": "error", "message": f"Errore durante il recupero dati dal database (raw_network_traffic): {str(e)}. La tabella potrebbe non esistere o non contenere dati."}), 500
     except Exception as e:
         print(f"Errore generico nel recupero dati: {e}")
@@ -139,16 +135,15 @@ def export_csv():
         
         # df = df.fillna('-')  # SE C'E' BISOGNO DI RIMUOVERE I NaN
         
-        # Oppure converti in un formato leggibile per CSV, ad esempio stringa ISO
         df['timestamp_capture'] = pd.to_datetime(df['timestamp_capture'], unit='us').dt.strftime('%Y-%m-%d %H:%M:%S.%f')
-        
-        # Crea un buffer di memoria per il CSV
+
+        # Buffer di memoria per il CSV
         output = io.StringIO()
         df.to_csv(output, index=False)
         csv_data = output.getvalue()
         output.close()
 
-        # Genera un nome file univoco con il datetime della richiesta di esportazione
+        # Generazione nome file univoco con il datetime della richiesta di esportazione
         export_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         file_name = f"raw_network_traffic_export_{export_timestamp}.csv"
         
@@ -180,9 +175,9 @@ def clear_data():
         conn = get_cloudsql_conn()
         if not conn:
             return jsonify({"status": "error", "message": "Impossibile connettersi a Cloud SQL."}), 500
-        
+ 
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM raw_network_traffic") # Modificato il nome della tabella
+        cursor.execute("TRUNCATE TABLE raw_network_traffic")
         conn.commit()
         cursor.close()
         return jsonify({"status": "success", "message": "Dati eliminati con successo dalla tabella raw_network_traffic."})
@@ -192,7 +187,6 @@ def clear_data():
     finally:
         if conn:
             conn.close()
-
 
 @app.route('/api/status', methods=['GET'])
 def get_status():

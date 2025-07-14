@@ -86,11 +86,11 @@
         }
 
         .nav-button {
-            background-color: #6c757d;
+            background-color: #25a72f;
         }
 
         .nav-button:hover {
-            background-color: #5a6268;
+            background-color: #218838;
         }
 
         .export-button {
@@ -219,11 +219,11 @@
         </div>
 
         <div class="section">
-            <button class="nav-button" onclick="window.location.href = 'http://' + window.location.hostname + ':5000/';">Go to Orchestrator GUI (5000)</button>
+            <button class="nav-button" onclick="window.location.href = 'http://' + window.location.hostname + ':5000/';">Attacker GUI</button>
         </div>
 
         <div class="section">
-            <h2>Captured Network Traffic (Raw)</h2>
+            <h2>Captured Network Traffic</h2>
             <div class="filter-controls">
                 <div>
                     <label for="filterProtocol">Protocol:</label>
@@ -247,7 +247,7 @@
                 </div>
                 <div style="grid-column: span 2; display: flex; gap: 10px; justify-content: flex-start;">
                     <button onclick="fetchData()">Apply Filters</button>
-                    <button class="nav-button" onclick="clearFilters()">Clear Filters</button>
+                    <button class="clear-button" onclick="clearFilters()">Clear Filters</button>
                 </div>
             </div>
             
