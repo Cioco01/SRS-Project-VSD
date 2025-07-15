@@ -1,0 +1,7 @@
+web_server_ip: "10.0.1.4"
+dns_server_ip: "10.0.1.2"
+db_server_ip: "10.0.3.2"
+
+simulate_dns_spike: true #da imporre true dopo
+simulate_http_port_change: true #da imporre true dopo
+simulate_unusual_db_client: true #da imporre true dopo
