@@ -1,4 +1,3 @@
-# File: modules/compute-instance/variables.tf
 
 variable "project_id" {
   description = "The GCP project ID."
@@ -35,7 +34,6 @@ variable "gcs_scripts_bucket_name_metadata" {
   type        = string
 }
 
-# --- INIZIO NUOVE VARIABILI ---
 variable "gcs_script_base_paths" {
   description = "Map of GCS script base paths for each VM type."
   type        = map(string)
@@ -50,4 +48,3 @@ variable "vm_install_dirs" {
   description = "Map of installation directories on each VM type."
   type        = map(string)
 }
-# --- FINE NUOVE VARIABILI ---

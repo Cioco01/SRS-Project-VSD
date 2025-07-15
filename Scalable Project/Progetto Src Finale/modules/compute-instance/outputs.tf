@@ -1,4 +1,3 @@
-# modules/compute-instance/outputs.tf
 
 output "attacker_node_01_ip_internal" {
   description = "L'indirizzo IP interno del nodo attaccante."

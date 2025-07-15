@@ -2,7 +2,7 @@
 
 resource "google_compute_firewall" "security_sim_vpc_allow_ssh_iap_dmz" {
   name    = "security-sim-vpc-allow-ssh-iap-dmz"
-  network = var.vpc_self_link # Usa il self_link della VPC
+  network = var.vpc_self_link 
   project = var.project_id
 
   allow {

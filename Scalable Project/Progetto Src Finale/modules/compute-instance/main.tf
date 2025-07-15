@@ -27,7 +27,8 @@ resource "google_compute_instance" "attacker_node_01" {
     INSTALL_DIR             = lookup(var.vm_install_dirs, "attacker-node-01", "/opt/scripts/default")
   }
   metadata_startup_script = <<-EOT
-    # ... (il tuo script di startup per attacker_node_01) ...
+    #!/bin/bash
+    sudo apt-get update && sudo apt-get install -y nmap hydra python3 python3-pip && pip3 install python-nmap paramiko
   EOT
   service_account {
     email  = var.client_vm_sa_email
@@ -61,7 +62,8 @@ resource "google_compute_instance" "db_server_01" {
     INSTALL_DIR             = lookup(var.vm_install_dirs, "db-server-01", "/opt/scripts/default")
   }
   metadata_startup_script = <<-EOT
-    # ... (il tuo script di startup per db_server_01) ...
+    #!/bin/bash
+    sudo apt-get update && sudo apt-get install -y mariadb-server && sudo systemctl start mariadb && sudo systemctl enable mariadb
   EOT
 }
 
@@ -94,11 +96,12 @@ resource "google_compute_instance" "dns_server_01" {
     INSTALL_DIR             = lookup(var.vm_install_dirs, "dns-server-01", "/opt/scripts/default")
   }
   metadata_startup_script = <<-EOT
-    # ... (il tuo script di startup per dns_server_01) ...
+    #!/bin/bash
+    sudo apt-get update && sudo apt-get install -y bind9 bind9utils bind9-doc && sudo systemctl start bind9 && sudo systemctl enable bind9
   EOT
 }
 
-# Internal Client 01 (REINSERITO QUI!)
+# Internal Client 01
 resource "google_compute_instance" "internal_client_01" {
   name         = "internal-client-01"
   zone         = var.zone
@@ -129,7 +132,8 @@ resource "google_compute_instance" "internal_client_01" {
   }
 
   metadata_startup_script = <<-EOT
-    # ... (il tuo script di startup per internal_client_01) ...
+    #!/bin/bash
+    sudo apt-get update && sudo apt-get install -y python3 python3-pip && pip3 install requests dnspython psycopg2-binary
   EOT
   service_account {
     email  = var.client_vm_sa_email
@@ -166,6 +170,7 @@ resource "google_compute_instance" "web_server_01" {
     INSTALL_DIR             = lookup(var.vm_install_dirs, "web-server-01", "/opt/scripts/default")
   }
   metadata_startup_script = <<-EOT
-    # ... (il tuo script di startup per web_server_01) ...
+    #!/bin/bash
+    sudo apt-get update && sudo apt-get install -y nginx && echo '<h1>Simulated Web Server</h1>' | sudo tee /var/www/html/index.html && sudo systemctl start nginx
   EOT
 }
