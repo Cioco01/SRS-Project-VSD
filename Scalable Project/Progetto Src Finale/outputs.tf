@@ -93,3 +93,19 @@ output "cloudsql_simuser_username" {
   description = "Il nome utente per il database simuser."
   value       = module.cloud_sql.simuser_username
 }
+
+# Output dal modulo Packet Mirroring
+output "packet_mirroring_policy_self_link" {
+  description = "Self link (ID) of the Packet Mirroring Policy."
+  value       = google_compute_packet_mirroring.security_sim_packet_mirroring_policy.id
+}
+
+output "packet_mirroring_collector_ilb_forwarding_rule_self_link" {
+  description = "Self link of the Internal Load Balancer forwarding rule used as Packet Mirroring collector."
+  value       = google_compute_forwarding_rule.packet_mirroring_collector_forwarding_rule.self_link
+}
+
+output "packet_mirroring_collector_ilb_ip" {
+  description = "IP address of the Internal Load Balancer forwarding rule used as Packet Mirroring collector."
+  value       = google_compute_forwarding_rule.packet_mirroring_collector_forwarding_rule.ip_address
+}

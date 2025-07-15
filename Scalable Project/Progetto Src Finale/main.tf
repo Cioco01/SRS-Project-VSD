@@ -241,6 +241,89 @@ resource "google_storage_bucket_object" "start_simulation_sh" {
   source = "${path.root}/scripts/Client-node-scripts/start_simulation.sh"
 }
 
+##  Packet Mirroring Configuration
+# Data source for the packet mirroring collector
+data "google_compute_instance_group" "attacker_node_instance_group" {
+  name    = "instance-group-1" 
+  zone    = var.gcp_zone
+  project = var.gcp_project_id
+}
+
+#Health check for the packet mirroring collector
+resource "google_compute_health_check" "packet_mirroring_collector_health_check" {
+  name        = "packet-mirror-collector-hc"
+  project     = var.gcp_project_id
+  timeout_sec = 5
+  check_interval_sec = 5
+  tcp_health_check {
+    port = 80
+  }
+}
+
+# Packet Mirroring collector backend service
+resource "google_compute_region_backend_service" "packet_mirroring_collector_backend_service" {
+  name                  = "traffic-load-balancer-for-mirroring" # Il nome del tuo backendService dal JSON originale
+  region                = var.gcp_region
+  project               = var.gcp_project_id
+  protocol              = "TCP"
+  load_balancing_scheme = "INTERNAL" # Necessario per un Internal Load Balancer che funge da collector
+
+  health_checks = [google_compute_health_check.packet_mirroring_collector_health_check.self_link]
+
+  backend {
+    group = data.google_compute_instance_group.attacker_node_instance_group.self_link
+    # Non sono necessarie named_port per il Packet Mirroring collector,
+    # ma il backend service deve esistere.
+  }
+}
+
+# Forwarding Rule for the Packet Mirroring collector
+resource "google_compute_forwarding_rule" "packet_mirroring_collector_forwarding_rule" {
+  name                  = "traffic-load-balancer-for-mirr-forwarding-rule-2" 
+  ip_address            = "10.0.1.10" 
+  region                = var.gcp_region
+  project               = var.gcp_project_id
+  port_range            = "1-65535" # Corrisponde a "allPorts": true
+  load_balancing_scheme = "INTERNAL"
+  backend_service       = google_compute_region_backend_service.packet_mirroring_collector_backend_service.self_link
+  network               = module.vpc.vpc_self_link
+  subnetwork            = module.vpc.dmz_subnet_self_link 
+  ip_protocol           = "TCP"
+  service_label         = "mirroring"
+}
+
+# Packet Mirroring Policy
+resource "google_compute_packet_mirroring" "security_sim_packet_mirroring_policy" {
+  name        = "security-sim-packet-mirroring-policy"
+  description = "Packet mirroring policy for security simulation traffic to attacker-node-01 (collector)."
+  project     = var.gcp_project_id
+  region      = var.gcp_region
+
+  network {
+    url = module.vpc.vpc_self_link
+  }
+
+# Le risorse da cui mirrorare il traffico: i nodi VM specificati.
+  mirrored_resources {
+    instances {
+      url = module.compute_instance.internal_client_01_self_link
+    }
+    instances {
+      url = module.compute_instance.db_server_01_self_link
+    }
+    instances {
+      url = module.compute_instance.dns_server_01_self_link
+    }
+    instances {
+      url = module.compute_instance.web_server_01_self_link
+    }
+  }
+
+  # La destinazione del traffico mirrorato: l'Internal Load Balancer Collector.
+  collector_ilb {
+    url = google_compute_forwarding_rule.packet_mirroring_collector_forwarding_rule.self_link
+  }
+}
 
 # DB-node-scripts
 resource "google_storage_bucket_object" "db_server_startup_sh" {
@@ -262,7 +345,6 @@ resource "google_storage_bucket_object" "web_server_startup_sh" {
   bucket = module.cloud_storage.bucket_name
   source = "${path.root}/scripts/WS-node-scripts/web_server_startup.sh"
 }
-
 
 module "compute_instance" {
   source                     = "./modules/compute-instance"

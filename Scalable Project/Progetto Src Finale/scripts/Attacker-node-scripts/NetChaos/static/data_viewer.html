@@ -8,7 +8,7 @@
         /* Base styles */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0; 
+            margin: 0;
             padding: 20px;
             background-color: #f0f2f5;
             color: #333;
@@ -20,7 +20,7 @@
             padding: 30px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 1400px; 
+            max-width: 1400px;
             margin: 30px auto;
             box-sizing: border-box;
         }
@@ -61,7 +61,7 @@
         input[type="text"],
         input[type="number"],
         select {
-            width: 100%; 
+            width: 100%;
             padding: 12px;
             margin-bottom: 15px;
             border: 1px solid #d4d4d4;
@@ -80,7 +80,7 @@
             font-size: 1em;
             margin-right: 10px;
             transition: background-color 0.3s ease;
-            white-space: nowrap; 
+            white-space: nowrap;
         }
 
         button:hover {
@@ -207,9 +207,9 @@
             }
         }
 
-        .info-button-wrapper { 
-            display: inline-block; 
-            position: relative; 
+        .info-button-wrapper {
+            display: inline-block;
+            position: relative;
             vertical-align: middle;
             margin-left: 10px;
         }
@@ -233,7 +233,7 @@
         }
 
         .info-button.active,
-        .info-button:hover { 
+        .info-button:hover {
             background-color: #ffc107;
             color: #333;
             border-color: #e0a800;
@@ -242,8 +242,8 @@
         /* Stili per il tooltip */
         .tooltip-text {
             visibility: hidden;
-            width: 350px; 
-            max-height: 120px; 
+            width: 350px;
+            max-height: 120px;
             overflow-y: auto;
             background-color: #555;
             color: #fff;
@@ -252,14 +252,14 @@
             padding: 8px 12px;
             position: absolute;
             z-index: 2;
-            bottom: 125%; 
+            bottom: 125%;
             left: 50%;
-            margin-left: -175px; 
+            margin-left: -175px;
             opacity: 0;
             transition: opacity 0.3s ease;
             font-size: 0.9em;
             line-height: 1.4;
-            white-space: normal; 
+            white-space: normal;
             word-wrap: break-word;
             pointer-events: none; /* Permette di cliccare attraverso se visibilità è hidden */
         }
@@ -332,7 +332,7 @@
                     <button class="clear-button" onclick="clearFilters()">Clear Filters</button>
                 </div>
             </div>
-            
+
             <div style="margin-bottom: 20px;">
                 <button onclick="fetchData()">Refresh Data (Last 1000)</button>
                 <button class="export-button" onclick="exportCsv()">Export All to GCS</button>
@@ -384,7 +384,7 @@
             const responseDiv = document.getElementById('response');
             responseDiv.textContent = 'Fetching data...';
             const tableBody = document.querySelector('#dataTable tbody');
-            tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>'; 
+            tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>';
 
             const protocol = document.getElementById('filterProtocol').value;
             const sourceIp = document.getElementById('filterSourceIp').value;
@@ -402,7 +402,7 @@
             try {
                 const res = await fetch(`${dataViewerBackendUrl}/api/get_captured_data?${queryParams.toString()}`);
                 const data = await res.json();
-                
+
                 if (data.status === "success") {
                     responseDiv.textContent = `Status: ${data.status}. Records fetched: ${data.data.length}`;
                     renderTable(data.data);
@@ -432,6 +432,7 @@
                     <td>${new Date(row.timestamp_capture / 1000).toLocaleString()}</td>
                     <td>${row.source_ip || ''}</td>
                     <td>${row.destination_ip || ''}</td>
+                    <td>${row.source_port || ''}</td>
                     <td>${row.destination_port || ''}</td>
                     <td>${row.protocol || ''}</td>
                     <td>${row.packet_length || ''}</td>
@@ -500,7 +501,7 @@
         function toggleInfoTooltip() {
             const infoButton = document.getElementById('infoButton');
             const infoTooltip = document.getElementById('infoTooltip');
-            
+
             infoTooltip.classList.toggle('visible');
             infoButton.classList.toggle('active');
         }
@@ -508,7 +509,7 @@
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             checkBackendStatus();
-            setInterval(checkBackendStatus, 10000); 
+            setInterval(checkBackendStatus, 10000);
             fetchData();
 
             const infoButton = document.getElementById('infoButton');
