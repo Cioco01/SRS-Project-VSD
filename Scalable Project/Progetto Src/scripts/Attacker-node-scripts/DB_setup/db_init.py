@@ -59,7 +59,7 @@ def create_tables(conn, sql_script_path):
         return False
 
 if __name__ == "__main__":
-    SQL_SCRIPT_PATH = os.path.expanduser('~/NetChaos/DB_setup/create_tables.sql') # Assicurati che il percorso sia corretto
+    SQL_SCRIPT_PATH = os.path.expanduser('~/NetChaos/DB_setup/create_tables.sql')
 
     env_vars = get_db_env_vars()
 
@@ -74,9 +74,9 @@ if __name__ == "__main__":
         conn = get_cloudsql_conn(env_vars)
         if conn:
             if not create_tables(conn, SQL_SCRIPT_PATH):
-                exit(1) # Esci con un codice di errore se la creazione delle tabelle fallisce
+                exit(1) 
         else:
-            exit(1) # Esci con un codice di errore se la connessione fallisce
+            exit(1) 
     except Exception as e:
         print(f"Errore generale nel main di db_init.py: {e}")
         exit(1)

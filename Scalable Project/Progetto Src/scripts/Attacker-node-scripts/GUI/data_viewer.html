@@ -8,7 +8,7 @@
         /* Base styles */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0; /* Remove default body margin */
+            margin: 0; 
             padding: 20px;
             background-color: #f0f2f5;
             color: #333;
@@ -20,9 +20,9 @@
             padding: 30px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 1400px; /* Increased max-width for wider screens */
+            max-width: 1400px; 
             margin: 30px auto;
-            box-sizing: border-box; /* Include padding in element's total width/height */
+            box-sizing: border-box;
         }
 
         h1 {
@@ -39,6 +39,8 @@
             margin-top: 25px;
             margin-bottom: 20px;
             font-weight: 500;
+            display: inline-block; /* Permette al bottone di essere sulla stessa riga */
+            vertical-align: middle; /* Allinea verticalmente con il bottone */
         }
 
         .section {
@@ -59,7 +61,7 @@
         input[type="text"],
         input[type="number"],
         select {
-            width: 100%; /* Make inputs take full width of their parent div */
+            width: 100%; 
             padding: 12px;
             margin-bottom: 15px;
             border: 1px solid #d4d4d4;
@@ -78,7 +80,7 @@
             font-size: 1em;
             margin-right: 10px;
             transition: background-color 0.3s ease;
-            white-space: nowrap; /* Prevent buttons from wrapping text */
+            white-space: nowrap; 
         }
 
         button:hover {
@@ -109,23 +111,21 @@
             background-color: #c82333;
         }
 
-        /* Filter Controls Layout */
         .filter-controls {
-            display: grid; /* Use CSS Grid for flexible layout */
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Auto-fit columns, min 180px, max 1fr */
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
 
         .filter-controls button {
-            width: auto; /* Buttons take natural width */
-            margin-top: 15px; /* Align buttons below inputs */
+            width: auto;
+            margin-top: 15px;
         }
 
-        /* Data Table Styles */
         .data-table-container {
             max-height: 500px;
-            overflow-x: auto; /* Allow horizontal scrolling for wide tables */
+            overflow-x: auto;
             overflow-y: auto;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
@@ -136,7 +136,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.9em;
-            min-width: 900px; /* Ensure table doesn't shrink too much on smaller screens */
+            min-width: 900px;
         }
 
         th, td {
@@ -144,7 +144,7 @@
             border-bottom: 1px solid #ddd;
             text-align: left;
             word-break: break-word;
-            vertical-align: top; /* Align content to the top in cells */
+            vertical-align: top;
         }
 
         th {
@@ -153,14 +153,13 @@
             position: sticky;
             top: 0;
             z-index: 1;
-            white-space: nowrap; /* Prevent header text from wrapping too much */
+            white-space: nowrap;
         }
 
         tr:hover {
             background-color: #f1f1f1;
         }
 
-        /* Status and Response sections */
         .status-section {
             padding: 10px;
             background-color: #d4edda;
@@ -187,26 +186,100 @@
             font-size: 0.9em;
             max-height: 400px;
             overflow-y: auto;
-            word-break: break-all; /* Ensures long lines of text break */
+            word-break: break-all;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 768px) {
             .container {
                 margin: 10px;
                 padding: 15px;
             }
             .filter-controls {
-                grid-template-columns: 1fr; /* Stack filters vertically on small screens */
+                grid-template-columns: 1fr;
             }
             button {
-                width: 100%; /* Full width buttons on small screens */
+                width: 100%;
                 margin-right: 0;
                 margin-bottom: 10px;
             }
             .filter-controls button {
-                margin-top: 0; /* Reset margin for stacked buttons */
+                margin-top: 0;
             }
+        }
+
+        .info-button-wrapper { 
+            display: inline-block; 
+            position: relative; 
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+
+        .info-button {
+            background-color: white;
+            color: #333;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.2em;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .info-button.active,
+        .info-button:hover { 
+            background-color: #ffc107;
+            color: #333;
+            border-color: #e0a800;
+        }
+
+        /* Stili per il tooltip */
+        .tooltip-text {
+            visibility: hidden;
+            width: 350px; 
+            max-height: 120px; 
+            overflow-y: auto;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 2;
+            bottom: 125%; 
+            left: 50%;
+            margin-left: -175px; 
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            font-size: 0.9em;
+            line-height: 1.4;
+            white-space: normal; 
+            word-wrap: break-word;
+            pointer-events: none; /* Permette di cliccare attraverso se visibilità è hidden */
+        }
+
+        /* Classe per mostrare il tooltip */
+        .tooltip-text.visible {
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto; /* Riabilita gli eventi del mouse quando visibile */
+        }
+
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #555 transparent transparent transparent;
         }
     </style>
 </head>
@@ -223,7 +296,16 @@
         </div>
 
         <div class="section">
-            <h2>Captured Network Traffic</h2>
+            <h2>Captured Network Traffic
+                <div class="info-button-wrapper">
+                    <button class="info-button" id="infoButton">
+                        !
+                        <span class="tooltip-text" id="infoTooltip">
+                            Il traffico che rappresenta gli attacchi purtroppo viene catturato 2 volte, questo a causa del mirroring sulla porta dell'attacker. Si può risolvere tranquillamente con una gestione del CSV durante le analisi.
+                        </span>
+                    </button>
+                </div>
+            </h2>
             <div class="filter-controls">
                 <div>
                     <label for="filterProtocol">Protocol:</label>
@@ -283,7 +365,7 @@
     </div>
 
     <script>
-        const dataViewerBackendUrl = window.location.origin; // Assume data viewer is on the same host, port 5004
+        const dataViewerBackendUrl = window.location.origin;
 
         // --- Backend Status Check ---
         async function checkBackendStatus() {
@@ -302,7 +384,6 @@
             const responseDiv = document.getElementById('response');
             responseDiv.textContent = 'Fetching data...';
             const tableBody = document.querySelector('#dataTable tbody');
-            // Clear existing rows and show loading message, adjust colspan for new columns
             tableBody.innerHTML = '<tr><td colspan="11">Loading...</td></tr>'; 
 
             const protocol = document.getElementById('filterProtocol').value;
@@ -322,7 +403,6 @@
                 const res = await fetch(`${dataViewerBackendUrl}/api/get_captured_data?${queryParams.toString()}`);
                 const data = await res.json();
                 
-                // Display only the message from the backend, not the entire status object
                 if (data.status === "success") {
                     responseDiv.textContent = `Status: ${data.status}. Records fetched: ${data.data.length}`;
                     renderTable(data.data);
@@ -339,7 +419,7 @@
 
         function renderTable(data) {
             const tableBody = document.querySelector('#dataTable tbody');
-            tableBody.innerHTML = ''; // Clear existing data
+            tableBody.innerHTML = '';
 
             if (data.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="11">No data available.</td></tr>';
@@ -348,13 +428,10 @@
 
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                // Ensure field names match database columns (after Python processing)
-                // Use || '' for values that might be null/None from backend to display empty string
                 tr.innerHTML = `
                     <td>${new Date(row.timestamp_capture / 1000).toLocaleString()}</td>
                     <td>${row.source_ip || ''}</td>
                     <td>${row.destination_ip || ''}</td>
-                    <td>${row.source_port || ''}</td>
                     <td>${row.destination_port || ''}</td>
                     <td>${row.protocol || ''}</td>
                     <td>${row.packet_length || ''}</td>
@@ -373,16 +450,16 @@
             document.getElementById('filterDestinationIp').value = '';
             document.getElementById('filterSourcePort').value = '';
             document.getElementById('filterDestinationPort').value = '';
-            fetchData(); // Refresh data with cleared filters
+            fetchData();
         }
 
-        // --- Export to CSV (now uploads to GCS) ---
+        // --- Export to CSV to GCS ---
         async function exportCsv() {
             const responseDiv = document.getElementById('response');
             responseDiv.textContent = 'Exporting all data to GCS...';
             try {
                 const res = await fetch(`${dataViewerBackendUrl}/api/export_csv`, {
-                    method: 'GET' // Still a GET request as it's an export trigger
+                    method: 'GET'
                 });
                 const data = await res.json();
 
@@ -412,7 +489,7 @@
                 const data = await res.json();
                 responseDiv.textContent = JSON.stringify(data, null, 2);
                 if (data.status === 'success') {
-                    fetchData(); // Refresh table after clearing
+                    fetchData();
                 }
             } catch (error) {
                 responseDiv.textContent = 'Error clearing data: ' + error.message;
@@ -420,11 +497,31 @@
             }
         }
 
+        function toggleInfoTooltip() {
+            const infoButton = document.getElementById('infoButton');
+            const infoTooltip = document.getElementById('infoTooltip');
+            
+            infoTooltip.classList.toggle('visible');
+            infoButton.classList.toggle('active');
+        }
+
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             checkBackendStatus();
-            setInterval(checkBackendStatus, 10000); // Check status every 10 seconds
-            fetchData(); // Load initial data
+            setInterval(checkBackendStatus, 10000); 
+            fetchData();
+
+            const infoButton = document.getElementById('infoButton');
+            infoButton.addEventListener('click', toggleInfoTooltip);
+
+            document.addEventListener('click', (event) => {
+                const infoButton = document.getElementById('infoButton');
+                const infoTooltip = document.getElementById('infoTooltip');
+                if (infoTooltip.classList.contains('visible') && !infoButton.contains(event.target) && !infoTooltip.contains(event.target)) {
+                    infoTooltip.classList.remove('visible');
+                    infoButton.classList.remove('active');
+                }
+            });
         });
     </script>
 </body>

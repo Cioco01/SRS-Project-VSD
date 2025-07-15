@@ -13,22 +13,22 @@ import pymysql
 
 app = Flask(__name__)
 
-# --- Configurazione Cloud SQL ---
+# Configurazione Cloud SQL
 CLOUDSQL_CONNECTION_NAME = os.environ.get('CLOUDSQL_CONNECTION_NAME')
 CLOUDSQL_DATABASE_NAME = os.environ.get('CLOUDSQL_DATABASE_NAME')
 CLOUDSQL_USER_NAME = os.environ.get('CLOUDSQL_USER_NAME')
 CLOUDSQL_USER_PASSWORD = os.environ.get('CLOUDSQL_USER_PASSWORD')
 
-# Global state for tcpdump process
+# Variabili globali per la cattura del traffico
 tcpdump_process = None
 capture_thread = None
 stop_capture_event = threading.Event()
 
 # Buffer per gli eventi catturati prima dell'inserimento nel DB
 captured_traffic_buffer = []
-BUFFER_THRESHOLD = 50 # Inserisci nel DB ogni 50 pacchetti o ogni 10 secondi
+BUFFER_THRESHOLD = 100 # Inserisci nel DB ogni 100 pacchetti o ogni 10 secondi
 LAST_DB_INSERT_TIME = time.time()
-BUFFER_TIME_LIMIT = 10 # secondi
+BUFFER_TIME_LIMIT = 10 
 
 connector = Connector() # Inizializza una sola volta
 
@@ -101,16 +101,12 @@ def parse_tcpdump_line(line):
         'flags': '', #None 
         'ttl': None,
         'description': '',
-        'full_line': line.strip(), #line #codicevecchio
-        'ingestion_time': datetime.now() #AGGIUNTA QUESTA RIGA LOLLO 
+        'full_line': line.strip(),
+        'ingestion_time': datetime.now()
     }
+    # Aggiunta di un timestamp Unix in microsecondi
+    data['timestamp_capture'] = int(time.time() * 1000000)
 
-    # Timestamp (unix timestamp from relative, or use current time if relative not parsed)
-    # The -ttt option gives microsecond-precision relative to the first packet
-    # It's safer to use current time for absolute timestamp or configure tcpdump differently
-    data['timestamp_capture'] = int(time.time() * 1000000) # Microseconds Unix timestamp
-
-    #------PEZZO NUOVO 10/07 forse cancella da QUI------
     length_match = re.search(r'length (\d+)', line)
     if length_match:
         try:
@@ -118,8 +114,8 @@ def parse_tcpdump_line(line):
         except ValueError:
             logger.warning(f"Impossibile parsare la lunghezza del pacchetto dalla riga: {line.strip()}")
             data['packet_length'] = None
-    #-------- A QUI-------
-    # Try to extract IP addresses and ports
+            
+    # Estrazione dell'indirizzo IP e delle porte
     ip_port_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d+)\s*>\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d+):', line)
     if ip_port_match:
         data['source_ip'] = ip_port_match.group(1)
@@ -127,11 +123,11 @@ def parse_tcpdump_line(line):
         data['destination_ip'] = ip_port_match.group(3)
         data['destination_port'] = int(ip_port_match.group(4))
 
-    # Try to extract protocol (TCP, UDP, ICMP, etc.)
+    # Estrazione del protocollo (TCP, UDP, ICMP, ecc.)
     protocol_match = re.search(r':\s*(TCP|UDP|ICMP|ARP|IP)\b', line, re.IGNORECASE)
     if protocol_match:
         data['protocol'] = protocol_match.group(1).upper()
-    else: # Fallback to a broader pattern for common protocols
+    else: 
         if 'Flags [' in line and 'UDP' not in line:
             data['protocol'] = 'TCP'
         elif 'UDP' in line:
@@ -143,17 +139,17 @@ def parse_tcpdump_line(line):
         elif 'ARP' in line:
             data['protocol'] = 'ARP'
 
-    # Extract packet length (if -l is used, length is often at the beginning of the line after ethertype)
+    # Estrazione della lunghezza del pacchetto (se -l è usato, la lunghezza è spesso all'inizio della riga dopo ethertype)
     length_match = re.search(r'length (\d+):', line)
     if length_match:
         data['packet_length'] = int(length_match.group(1))
 
-    # Extract TCP flags
+    # Estrazione dei flag TCP
     flags_match = re.search(r'Flags\s*\[([A-Z,]+)\]', line)
     if flags_match:
         data['flags'] = flags_match.group(1)
 
-    # Extract TTL
+    # Estrazione del TTL
     ttl_match = re.search(r'ttl (\d+)', line)
     if ttl_match:
         data['ttl'] = int(ttl_match.group(1))
@@ -174,57 +170,27 @@ def capture_traffic_and_store_loop(interface='ens4'):
     """
     global tcpdump_process, captured_traffic_buffer, LAST_DB_INSERT_TIME
 
-    print(f"DEBUG: Funzione capture_traffic_and_store_loop avviata con interfaccia: {interface}") # NUOVA RIGA
+    print(f"DEBUG: Funzione capture_traffic_and_store_loop avviata con interfaccia: {interface}")
 
-    # Monitora l'interfaccia interna (subnet DMZ e private)
-    # L'IP dell'attacker-node-01 è 10.0.1.3
-    # L'interfaccia corretta dovrebbe essere quella collegata alla netchaos_vpc (es. eth0)
-    # Se vuoi catturare tutto il traffico interno, non specificare un host.
-    # Ma se vuoi solo il traffico che passa attraverso questa macchina o la riguarda,
-    # potresti voler aggiungere filtri.
-    # tcpdump -i eth0 -n -tttt -vvv -e -l # Cattura tutto su eth0
+    # IP interno dell'attacker-node (per escludere il traffico locale di Flask)
+    attacker_node_internal_ip = os.environ.get('ATTACKER_NODE_IP', '10.0.1.3')
 
-    # Filtro BPF per escludere il traffico SSH di gestione (se stai usando SSH sulla stessa interfaccia)
-    # e il traffico verso l'IP pubblico dell'attacker-node, concentrandoti sulla rete interna.
-    # L'IP interno di attacker-node-01 è 10.0.1.3
-    # Se il data viewer è accessibile dall'esterno, potresti vedere traffico verso 35.195.245.74
-    # che non è traffico "interno alla simulazione".
-    # Filtriamo per il traffico all'interno della subnet 10.0.0.0/8
-    # Questo escluderà anche il traffico tra l'orchestratore e i suoi agenti su 127.0.0.1
-
-    # Ottieni l'IP interno dell'attacker-node (per escludere il traffico locale di Flask)
-    attacker_node_internal_ip = os.environ.get('ATTACKER_NODE_IP', '10.0.1.3') # Usa la variabile d'ambiente
-
-    print(f"DEBUG: ATTACKER_NODE_IP: {attacker_node_internal_ip}") # NUOVA RIGA
-
-    # BPF filter: Cattura tutto il traffico che non sia sul localhost e non sia l'IP pubblico della VM,
-    # e che sia diretto o provenga da un'altra VM interna (es. 10.0.x.x)
-    # NOTA: Questo filtro è complesso e potrebbe aver bisogno di tuning.
-    # Per semplicità, inizialmente potresti catturare tutto e filtrare in Python.
-    # filter_expression = f"not (host 127.0.0.1) and net 10.0.0.0/8" # Cattura traffico interno
-    # O più semplice per il traffico IN/OUT della VM sull'interfaccia di rete interna
-    filter_expression = "src net 10.0.0.0/8 and dst net 10.0.0.0/8" # Lasciamo vuoto per catturare tutto su eth0, poi filtriamo in Python.
-                           # O possiamo specificare l'interfaccia di rete VPC es. eth0
-                           # tcpdump -i eth0 ...
-
+    print(f"DEBUG: ATTACKER_NODE_IP: {attacker_node_internal_ip}")
+    # Filtro per catturare solo il traffico interno tra i nodi della rete simulata
+    filter_expression = "src net 10.0.0.0/8 and dst net 10.0.0.0/8"
     print(f"Avvio cattura traffico con tcpdump su interfaccia {interface}...")
-
-    # Assicurati che l'utente 'cristian_ciocoiu' possa eseguire tcpdump senza password (già fatto nello startup script)
-    # sudo tcpdump -i eth0 -n -tttt -vvv -e -l
     cmd = ['sudo', 'tcpdump', '-i', 'ens4', '-n', '-tttt', '-vvv', '-e', '-l', filter_expression]
-    print(f"DEBUG: Comando tcpdump: {cmd}") # NUOVA RIGA
+    print(f"DEBUG: Comando tcpdump: {cmd}")
     
-    try: # Aggiungi un blocco try-except qui per catturare errori di subprocess.Popen
+    try:
         tcpdump_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
-        print(f"DEBUG: tcpdump process avviato con PID: {tcpdump_process.pid}") # NUOVA RIGA
+        print(f"DEBUG: tcpdump process avviato con PID: {tcpdump_process.pid}")
     except Exception as e:
-        print(f"ERRORE GRAVE: Impossibile avviare tcpdump! Errore: {e}") # NUOVA RIGA
-        return # Esci dalla funzione se tcpdump non parte    
-    # Leggi subito stderr per vedere errori di avvio di tcpdump
-    stderr_immediate = tcpdump_process.stderr.readline().strip() # QUESTA È LA RIGA DA MANTENERE SE L'ABBIAMO AGGIUNTA
+        print(f"ERRORE GRAVE: Impossibile avviare tcpdump! Errore: {e}")
+        return
+    stderr_immediate = tcpdump_process.stderr.readline().strip()
     if stderr_immediate:
         print(f"ERRORE TCPDUMP IMMEDIATO (STDERR): {stderr_immediate}")
-    # Considera di terminare qui o di loggare in modo più severo se questo è un errore critico
     else:
         print("DEBUG: Nessun errore immediato su stderr da tcpdump.")
     for line in iter(tcpdump_process.stdout.readline, ''):
@@ -232,28 +198,23 @@ def capture_traffic_and_store_loop(interface='ens4'):
             print("Segnale di stop ricevuto. Termino cattura tcpdump.")
             break
         
-        # Filtra linee vuote o di warning/errore di tcpdump
+        # Filtraggio di linee vuote o di warning/errore di tcpdump
         if not line.strip() or "listening on" in line or "dumping on" in line or "error" in line.lower():
             continue
-
-        # Non catturare il traffico loopback (127.0.0.1) o traffico specifico dell'orchestratore/agenti Flask
-        # che non è traffico di simulazione di rete.
-        # L'IP dell'orchestratore/attacker_agent è 10.0.1.3 (IP interno)
-        # e interagiscono tra loro su 127.0.0.1.
-        if "127.0.0.1" in line: # Exclude localhost traffic
+        # Ignora traffico locale dell'attacker-node
+        if "127.0.0.1" in line: 
              continue
 
         # Parsing della riga
         parsed_data = parse_tcpdump_line(line)
-
-        # Filtra ulteriormente se i dati non sono validi o non rientrano nella simulazione interna
+        # Ignora pacchetti senza IP di origine o destinazione
         if not parsed_data['source_ip'] or not parsed_data['destination_ip'] or \
            not (parsed_data['source_ip'].startswith('10.0.') or parsed_data['destination_ip'].startswith('10.0.')):
-            continue # Salta pacchetti non pertinenti alla rete interna 10.0.x.x
+            continue 
 
         captured_traffic_buffer.append(parsed_data)
 
-        # Inserisci i dati nel DB in batch
+        # Inserire i dati nel DB in batch
         current_time = time.time()
         if len(captured_traffic_buffer) >= BUFFER_THRESHOLD or \
            (current_time - LAST_DB_INSERT_TIME >= BUFFER_TIME_LIMIT and captured_traffic_buffer):
@@ -262,28 +223,27 @@ def capture_traffic_and_store_loop(interface='ens4'):
             captured_traffic_buffer.clear()
             LAST_DB_INSERT_TIME = current_time
 
-    # Una volta che il loop si interrompe, svuota il buffer finale
+    # Una volta che il loop si interrompe, si svuota il buffer finale
     if captured_traffic_buffer:
         print(f"Salvando i pacchetti rimanenti ({len(captured_traffic_buffer)}) nel DB...")
         insert_traffic_data(captured_traffic_buffer)
         captured_traffic_buffer.clear()
 
-    # Attendi che il processo tcpdump termini completamente
+    # Attesa del processo tcpdump che termini completamente
     tcpdump_process.wait()
     print("Cattura traffico tcpdump terminata.")
 
-# Endpoint Flask per controllare la cattura
 @app.route('/start_capture', methods=['POST'])
 def start_capture():
     global tcpdump_process, capture_thread, stop_capture_event
     if tcpdump_process is not None and tcpdump_process.poll() is None:
         return jsonify({"status": "error", "message": "Cattura traffico già in corso."}), 400
 
-    interface = request.json.get('interface', 'ens4') # Interfaccia di rete da monitorare
+    interface = request.json.get('interface', 'ens4')
     
     stop_capture_event.clear()
     capture_thread = threading.Thread(target=capture_traffic_and_store_loop, args=(interface,))
-    capture_thread.daemon = True # Permetti al thread di terminare con l'applicazione Flask
+    capture_thread.daemon = True
     capture_thread.start()
     return jsonify({"status": "success", "message": f"Cattura traffico avviata su {interface}."})
 
@@ -293,26 +253,21 @@ def stop_capture():
     if tcpdump_process is None or tcpdump_process.poll() is not None:
         return jsonify({"status": "error", "message": "Nessuna cattura traffico in corso da fermare."}), 400
 
-    stop_capture_event.set() # Segnala al thread di cattura di fermarsi
-    # tcpdump_process.terminate() # Invia SIGTERM a tcpdump
-    try: # <--- AGGIUNGI UN TRY-EXCEPT QUI per robustezza
-        # Modifica la riga seguente:
-        tcpdump_process.send_signal(signal.SIGINT) # <--- MODIFICATO DA subprocess.SIGINT a signal.SIGINT
+    stop_capture_event.set() 
+
+    try: 
+        tcpdump_process.send_signal(signal.SIGINT)
         print("Inviato SIGINT a tcpdump_process.")
     except Exception as e:
         print(f"ATTENZIONE: Errore nell'invio di SIGINT a tcpdump: {e}")
-        # Se tcpdump è già terminato, potrebbe dare errore, ma non deve bloccare il reset dello stato
-        # Potresti anche usare tcpdump_process.terminate() che è più generico
-        # o semplicemente un tcpdump_process.kill() come ultima risorsa.
 
-    # Aspetta un breve periodo che il thread di cattura si pulisca
     if capture_thread and capture_thread.is_alive():
         print("Attendendo la terminazione del thread di cattura...")
         capture_thread.join(timeout=5)
         if capture_thread.is_alive():
             print("Il thread di cattura non è terminato entro il timeout.")
 
-    tcpdump_process = None # Resetta lo stato solo dopo il tentativo di chiusura
+    tcpdump_process = None
     return jsonify({"status": "success", "message": "Cattura traffico terminata."})
 
 @app.route('/status', methods=['GET'])
@@ -323,6 +278,4 @@ def get_status():
 
 if __name__ == '__main__':
     print("Avvio Flask Traffic Capture Agent su http://127.0.0.1:5003")
-    # Usa la porta 5003, la stessa usata in orchestrator_backend per CAPTURE_AGENT_URL
-    # Debug=False per produzione
     app.run(host='127.0.0.1', port=5003, debug=False)

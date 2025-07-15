@@ -51,13 +51,9 @@ STATIC_DIR="${SCRIPT_DIR}/static"
 sudo mkdir -p "${SCRIPT_DIR}"
 sudo chown -R cristian_ciocoiu:cristian_ciocoiu "${SCRIPT_DIR}"
 
-# Copia gli script Python e i file statici.
-# Assicurati che Terraform stia copiando questi file nella VM (es. tramite un provisioning locale-exec)
-# Oppure, se hai un repository Git, clona qui:
-# git clone https://github.com/tuo-utente/NetChaos.git "${SCRIPT_DIR}"
-# cd "${SCRIPT_DIR}" # Se cloni, assicurati di essere nella directory corretta
-
-# PER IL MOMENTO, IPOTIZZA CHE TU STIA COPIANDO MANUALMENTE O TRAMITE SCP I FILE DA LOCALE A `~/NetChaos`
+# Abilita SSH 
+sudo sed -i 's/^#\?PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
 
 # Assicurati che la directory static esista e abbia i permessi
 mkdir -p "${STATIC_DIR}"
