@@ -1,7 +1,10 @@
 # scripts/main.py
 import yaml
 import os
-import time # Aggiunto per il loop di runtime
+import time
+from datetime import datetime
+import random # <--- AGGIUNTO PER LA CASUALITÀ
+
 from http_simulator import simulate_http_traffic
 from dns_simulator import simulate_dns_queries
 from db_simulator import simulate_db_access
@@ -10,6 +13,7 @@ def run_simulation_cycle(config_path="config.yaml"):
     """
     Esegue un ciclo di simulazione del traffico benigno o maligno, leggendo la configurazione.
     Gli IP dei server sono letti dalle variabili d'ambiente.
+    Le simulazioni vengono scelte casualmente in base alle opzioni di configurazione.
     """
     web_server_ip = os.getenv("WEB_SERVER_IP")
     dns_server_ip = os.getenv("DNS_SERVER_IP")
@@ -17,8 +21,6 @@ def run_simulation_cycle(config_path="config.yaml"):
 
     # Fallback per test locale (non raccomandato per GCP)
     if not all([web_server_ip, dns_server_ip, db_server_ip]):
-        # Rileggi la configurazione dal file per gli IP se le variabili d'ambiente non sono impostate
-        # Questo è il tuo caso quando lo esegui localmente, ma NON sulla VM
         try:
             with open(config_path, 'r') as f:
                 config_from_file = yaml.safe_load(f)
@@ -27,7 +29,6 @@ def run_simulation_cycle(config_path="config.yaml"):
             db_server_ip = db_server_ip or config_from_file.get('db_server_ip', '127.0.0.1')
         except FileNotFoundError:
             print(f"Errore: {config_path} non trovato. Non posso usare IP di fallback dal file.")
-            # Se nemmeno il file è trovato, usa i default hardcoded
             web_server_ip = web_server_ip or '127.0.0.1'
             dns_server_ip = dns_server_ip or '8.8.8.8'
             db_server_ip = db_server_ip or '127.0.0.1'
@@ -35,49 +36,59 @@ def run_simulation_cycle(config_path="config.yaml"):
         print("Assicurati che lo script di avvio di Terraform le abbia passate correttamente o di essere sulla VM.")
         print(f"Usando IP di fallback: Web={web_server_ip}, DNS={dns_server_ip}, DB={db_server_ip}\n")
 
-
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
     print(f"--- Inizio Ciclo di Simulazione ---")
-    print(f"Configurazione anomalie: DNS Spike={config['simulate_dns_spike']}, HTTP Port Change={config['simulate_http_port_change']}, Unusual DB Client={config['simulate_unusual_db_client']}\n")
+    print(f"Configurazione anomalie abilitate: DNS Spike={config.get('simulate_dns_spike', False)}, HTTP Port Change={config.get('simulate_http_port_change', False)}, Unusual DB Client={config.get('simulate_unusual_db_client', False)}\n")
 
-    # --- Simulazione Traffico HTTP ---
-    print("--- Simulazione Traffico HTTP ---")
-    simulate_http_traffic(web_server_ip, port=80, num_requests=5)
-    if config.get("simulate_http_port_change", False): # Usa .get per sicurezza
-        print("\n--- Simulazione Anomalia HTTP (Porta 8081) ---")
-        simulate_http_traffic(web_server_ip, port=8081, num_requests=5)
-    print()
+    # --- DEFINIZIONE DELLE AZIONI POSSIBILI ---
+    # Creiamo un elenco di funzioni (azioni) che possono essere scelte casualmente.
+    # Le azioni anomale vengono aggiunte solo se abilitate nel config.yaml.
+    
+    possible_actions = []
 
-    # --- Simulazione Query DNS ---
-    print("--- Simulazione Query DNS ---")
+    # Azioni HTTP
+    possible_actions.append(lambda: simulate_http_traffic(web_server_ip, port=80, num_requests=random.randint(3, 7)))
+    if config.get("simulate_http_port_change", False):
+        possible_actions.append(lambda: simulate_http_traffic(web_server_ip, port=8081, num_requests=random.randint(3, 7)))
+
+    # Azioni DNS
     domains = ["example.com", "google.com", "unibo.it", "wikipedia.org", "github.com"]
-    # CORREZIONE QUI: RIMOSSO 'num_queries=5'
-    simulate_dns_queries(dns_server_ip, domains, spike=config["simulate_dns_spike"])
-    if config.get("simulate_dns_spike", False): # Usa .get per sicurezza
-        print("\n--- Simulazione Anomalia DNS (Spike) ---")
-        # CORREZIONE QUI: RIMOSSO 'num_queries=50'
-        simulate_dns_queries(dns_server_ip, domains, spike=True)
-    print()
+    possible_actions.append(lambda: simulate_dns_queries(dns_server_ip, domains, spike=False))
+    if config.get("simulate_dns_spike", False):
+        possible_actions.append(lambda: simulate_dns_queries(dns_server_ip, domains, spike=True))
 
-    # --- Simulazione Accesso DB ---
-    print("--- Simulazione Accesso DB ---")
-    # Usa le credenziali definite nel modulo Cloud SQL
-    simulate_db_access(db_server_ip, user="sim_user", password="your_strong_password", anomaly=False)
-    if config.get("simulate_unusual_db_client", False): # Usa .get per sicurezza
-        print("\n--- Simulazione Anomalia DB (Accesso Inusuale) ---")
-        # Tentativo con un database insolito, dovrebbe fallire se le permessi non sono concessi
-        simulate_db_access(db_server_ip, user="sim_user", password="your_strong_password", anomaly=True)
-    print()
+    # Azioni DB
+    possible_actions.append(lambda: simulate_db_access(db_server_ip, user="sim_user", password="password", anomaly=False))
+    if config.get("simulate_unusual_db_client", False):
+        possible_actions.append(lambda: simulate_db_access(db_server_ip, user="sim_user", password="password", anomaly=True))
 
-    # Questo ciclo continua a eseguire le simulazioni indefinitamente
-    # Puoi aggiungere un contatore o una condizione di uscita se desideri un numero finito di cicli
-    # while True:
-    #     print(f"--- Ciclo di simulazione in corso ({time.time()}) ---")
-    #     time.sleep(60) # Attendi un minuto prima del prossimo ciclo
+    # --- ESECUZIONE CASUALE DELLE AZIONI ---
+    # Decidi quante azioni eseguire in questo ciclo (es. tra 1 e 3)
+    num_actions_to_execute = random.randint(1, len(possible_actions)) 
+    
+    # Seleziona casualmente N azioni uniche dall'elenco
+    selected_actions = random.sample(possible_actions, num_actions_to_execute)
 
+    print(f"Esecuzione di {num_actions_to_execute} azioni casuali in questo ciclo:")
+    for i, action in enumerate(selected_actions):
+        print(f"  - Esecuzione azione {i+1}/{num_actions_to_execute}...")
+        try:
+            action() # Chiama la funzione dell'azione selezionata
+            time.sleep(random.uniform(0.5, 2.0)) # Breve pausa tra le azioni all'interno dello stesso ciclo
+        except Exception as e:
+            print(f"ATTENZIONE: Errore durante l'esecuzione di un'azione casuale: {e}")
+            # Non bloccare l'intera simulazione per un singolo errore di azione
+
+    print(f"\n--- Fine Ciclo di Simulazione ---\n")
+    
 # Punto di ingresso principale
 if __name__ == "__main__":
-    # Il percorso a config.yaml dovrebbe essere relativo alla posizione di main.py
-    run_simulation_cycle(config_path=os.path.join(os.path.dirname(__file__), "config.yaml"))
+    config_file_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+    
+    simulation_cycle_duration = 1 # Secondi tra un ciclo e l'altro. Puoi modificarlo.
+
+    while True:
+        run_simulation_cycle(config_path=config_file_path)
+        time.sleep(simulation_cycle_duration)

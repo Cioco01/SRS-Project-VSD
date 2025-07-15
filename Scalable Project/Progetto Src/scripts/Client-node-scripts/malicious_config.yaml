@@ -1,0 +1,29 @@
+# scripts/malicious_config.yaml
+# Configurazione per gli attacchi simulati
+
+# Port Scanning
+enable_port_scan: true
+port_scan_target_ip_range: "10.0.1.0/24" # Esempio: subnet dei server
+port_scan_type: "SYN" # SYN, TCP, UDP
+port_scan_ports: [22, 80, 443, 3306, 53, 8081] # Porte comuni e quella di anomalia HTTP
+
+# Brute-Force (SSH)
+enable_brute_force_ssh: true
+brute_force_ssh_target_ip: "10.0.1.5" # Esempio: IP del server web o altro target SSH
+brute_force_ssh_username: "admin"
+brute_force_ssh_passwords: ["password", "123456", "test", "your_strong_password", "wrongpass"]
+
+# Malware Drop Simulation (HTTP/S Download)
+enable_malware_drop: true
+malware_drop_c2_domains: ["malicious-c2.example.com", "bad-update.somecdn.net"]
+malware_drop_file_paths: ["/update.exe", "/payload.bin"]
+malware_drop_simulated_size_kb: 1024 # Dimensione simulata del file in KB
+
+# Lateral Movement Simulation (SSH/HTTP attempts)
+enable_lateral_movement: true
+lateral_movement_target_ips: ["10.0.1.6", "10.0.2.2"] # Esempi: altri server, altri client
+lateral_movement_credentials:
+  - username: "admin"
+    password: "wrongpass"
+  - username: "sim_user"
+    password: "your_strong_password" # Una credenziale "compromessa" che potrebbe funzionare

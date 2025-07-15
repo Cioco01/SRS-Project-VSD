@@ -29,7 +29,7 @@ def get_local_ip():
 
 LOCAL_IP = get_local_ip()
 
-def simulate_http_traffic(ip, port=80, num_requests=5, log_file="/var/log/http_traffic.log"):
+def simulate_http_traffic(ip, port=80, num_requests=5,log_file=os.path.join(os.path.dirname(__file__), "http_traffic.log")):
     """
     Simula il traffico HTTP verso un server specificato.
     Registra gli eventi in un file di log JSON.

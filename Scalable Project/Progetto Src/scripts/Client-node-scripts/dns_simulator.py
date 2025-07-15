@@ -28,7 +28,7 @@ def get_local_ip():
 
 LOCAL_IP = get_local_ip()
 
-def simulate_dns_queries(dns_ip, domains, spike=False, log_file="/var/log/dns_traffic.log"):
+def simulate_dns_queries(dns_ip, domains, spike=False,log_file=os.path.join(os.path.dirname(__file__), "dns_traffic.log")):
     """
     Simula query DNS verso un server DNS specificato.
     Registra gli eventi in un file di log JSON.

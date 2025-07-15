@@ -27,7 +27,7 @@ def get_local_ip():
 
 LOCAL_IP = get_local_ip()
 
-def simulate_db_access(ip, user="sim_user", password="your_strong_password", anomaly=False, log_file="/var/log/db_traffic.log"):
+def simulate_db_access(ip, user="sim_user", password="your_strong_password", anomaly=False,log_file=os.path.join(os.path.dirname(__file__),"db_traffic.log")):
     """
     Simula l'accesso a un database MySQL/MariaDB.
     Introduce un'anomalia tentando di accedere a un database insolito.
