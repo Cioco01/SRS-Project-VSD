@@ -12,6 +12,10 @@ bind-address = 0.0.0.0
 EOF"
 sudo systemctl restart mariadb
 
+# Abilita SSH 
+sudo sed -i 's/^#\?PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
+
 # Creazione utente e database di esempio (se non gestito da Cloud SQL)
 # Dato che Cloud SQL è il DB principale, questo è più per un DB secondario o per test interni
 # Tuttavia, per completezza, mostro come si potrebbe fare
